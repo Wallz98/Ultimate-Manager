@@ -5,25 +5,24 @@ import asyncio
 import gerador
 import simulador
 
-# Mapeamento de cores (Flet 0.25.2: ft.Colors sem underline nas opacidades)
+# Mapeamento de cores para os escudos
 CORES = {
     "Azul": ft.Colors.BLUE_700,
     "Vermelho": ft.Colors.RED_700,
-    "Preto": ft.Colors.BLACK87,  # Corrigido: BLACK87
+    "Preto": ft.Colors.BLACK87,
     "Branco": ft.Colors.WHITE,
-    "Amarelo": ft.Colors.AMBER,
+    "Amarelo": ft.Colors.AMBER_400,
     "Verde": ft.Colors.GREEN_700,
     "Laranja": ft.Colors.ORANGE_700,
     "Roxo": ft.Colors.PURPLE_700
 }
 
-# Paletas para os BOTS
 PALETAS_VARIADAS = [
     (ft.Colors.PURPLE_800, ft.Colors.AMBER_400,
      ft.Colors.DEEP_PURPLE_900, ft.Colors.WHITE),
     (ft.Colors.GREEN_700, ft.Colors.WHITE,
      ft.Colors.LIGHT_GREEN_900, ft.Colors.YELLOW_400),
-    (ft.Colors.RED_800, ft.Colors.BLACK, ft.Colors.RED_900, ft.Colors.AMBER),
+    (ft.Colors.RED_800, ft.Colors.BLACK, ft.Colors.RED_900, ft.Colors.AMBER_400),
     (ft.Colors.BLUE_800, ft.Colors.YELLOW_400, ft.Colors.BLUE_900, ft.Colors.WHITE),
     (ft.Colors.ORANGE_800, ft.Colors.BLACK,
      ft.Colors.DEEP_ORANGE_900, ft.Colors.WHITE),
@@ -46,7 +45,7 @@ ICONES_BOT = [
 ]
 
 
-def construir_escudo(cor1=None, cor2=None, cor3=None, cor4=None, tamanho=1.0, is_bot=False, seed_id=1):
+def construir_escudo(cor1=None, cor2=None, cor3=None, cor4=None, formato="Clássico", tamanho=1.0, is_bot=False, seed_id=1):
     rnd = random.Random(seed_id)
 
     if is_bot or cor1 is None:
@@ -56,22 +55,36 @@ def construir_escudo(cor1=None, cor2=None, cor3=None, cor4=None, tamanho=1.0, is
             cor1, str) else cor1
         c2 = CORES.get(cor2, ft.Colors.RED_700) if isinstance(
             cor2, str) else cor2
-        c3 = CORES.get(cor3, ft.Colors.AMBER) if isinstance(
+        c3 = CORES.get(cor3, ft.Colors.AMBER_400) if isinstance(
             cor3, str) else cor3
         c4 = CORES.get(cor4, ft.Colors.WHITE) if isinstance(
             cor4, str) else cor4
 
+    # Ajusta o formato/borda conforme a opção do time
+    fmt = str(formato or "Clássico").lower()
+    if "redond" in fmt or "círculo" in fmt or "circulo" in fmt:
+        raio_borda = ft.border_radius.all(int(45 * tamanho))
+    elif "losang" in fmt or "diamante" in fmt:
+        raio_borda = ft.border_radius.only(
+            top_left=int(40 * tamanho),
+            bottom_right=int(40 * tamanho),
+            top_right=int(6 * tamanho),
+            bottom_left=int(6 * tamanho)
+        )
+    elif "quadrad" in fmt:
+        raio_borda = ft.border_radius.all(int(10 * tamanho))
+    else:  # "Clássico" / Padrão
+        raio_borda = ft.border_radius.only(
+            bottom_left=int(45 * tamanho), bottom_right=int(45 * tamanho),
+            top_left=int(6 * tamanho), top_right=int(6 * tamanho)
+        )
+
     icone_centro = ft.Icon(name=ft.Icons.STAR_ROUNDED,
                            size=35 * tamanho, color=c4)
-    raio_borda = ft.border_radius.only(
-        bottom_left=int(45 * tamanho), bottom_right=int(45 * tamanho),
-        top_left=int(6 * tamanho), top_right=int(6 * tamanho)
-    )
 
     if is_bot:
         icone_escolhido = rnd.choice(ICONES_BOT)
         estilo_borda = rnd.randint(1, 3)
-
         icone_centro = ft.Icon(name=icone_escolhido,
                                size=35 * tamanho, color=c4)
 
@@ -114,7 +127,6 @@ def construir_escudo(cor1=None, cor2=None, cor3=None, cor4=None, tamanho=1.0, is
         padding=5 * tamanho,
         border_radius=raio_borda,
         alignment=ft.alignment.center,
-        # Corrigido: BLACK38
         shadow=ft.BoxShadow(blur_radius=8, color=ft.Colors.BLACK38)
     )
 
@@ -190,7 +202,7 @@ def preparar_dados_partida(id_usuario, id_adversario=None):
     cursor = conn.cursor()
 
     cursor.execute(
-        "SELECT id, nome, cor_1, cor_2, cor_3, cor_4 FROM times WHERE id_usuario = ?", (id_usuario,))
+        "SELECT id, nome, COALESCE(formato, 'Clássico'), cor_1, cor_2, cor_3, cor_4 FROM times WHERE id_usuario = ?", (id_usuario,))
     user_time = cursor.fetchone()
 
     if user_time:
@@ -203,11 +215,11 @@ def preparar_dados_partida(id_usuario, id_adversario=None):
 
     if id_adversario:
         cursor.execute(
-            "SELECT id, nome, cor_1, cor_2, cor_3, cor_4 FROM times WHERE id = ?", (id_adversario,))
+            "SELECT id, nome, COALESCE(formato, 'Clássico'), cor_1, cor_2, cor_3, cor_4 FROM times WHERE id = ?", (id_adversario,))
         bot_time = cursor.fetchone()
     else:
         cursor.execute(
-            "SELECT id, nome, cor_1, cor_2, cor_3, cor_4 FROM times WHERE is_bot = 1 ORDER BY RANDOM() LIMIT 1")
+            "SELECT id, nome, COALESCE(formato, 'Clássico'), cor_1, cor_2, cor_3, cor_4 FROM times WHERE is_bot = 1 ORDER BY RANDOM() LIMIT 1")
         bot_time = cursor.fetchone()
 
     if not bot_time:
@@ -216,7 +228,7 @@ def preparar_dados_partida(id_usuario, id_adversario=None):
         conn = sqlite3.connect('meu_manager.db')
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT id, nome, cor_1, cor_2, cor_3, cor_4 FROM times WHERE id = ?", (id_bot,))
+            "SELECT id, nome, COALESCE(formato, 'Clássico'), cor_1, cor_2, cor_3, cor_4 FROM times WHERE id = ?", (id_bot,))
         bot_time = cursor.fetchone()
 
     cursor.execute(
@@ -239,15 +251,16 @@ def carregar_partida(page: ft.Page, id_usuario: int, id_adversario: int, ao_fina
 
     user_time, bot_time = preparar_dados_partida(id_usuario, id_adversario)
 
-    id_time_user, nome_user, c1, c2, c3, c4 = user_time
-    id_time_bot, nome_bot, _, _, _, _ = bot_time
+    id_time_user, nome_user, fmt_user, c1, c2, c3, c4 = user_time
+    id_time_bot, nome_bot, fmt_bot, _, _, _, _ = bot_time
 
     plantel_user = obter_nomes_plantel(id_time_user)
     plantel_bot = obter_nomes_plantel(id_time_bot)
 
-    escudo_user = construir_escudo(c1, c2, c3, c4, tamanho=0.9, is_bot=False)
+    escudo_user = construir_escudo(
+        c1, c2, c3, c4, formato=fmt_user, tamanho=0.9, is_bot=False)
     escudo_bot = construir_escudo(
-        tamanho=0.9, is_bot=True, seed_id=id_time_bot)
+        formato=fmt_bot, tamanho=0.9, is_bot=True, seed_id=id_time_bot)
 
     gols_user = ft.Text(
         "0", size=48, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
@@ -327,13 +340,21 @@ def carregar_partida(page: ft.Page, id_usuario: int, id_adversario: int, ao_fina
     btn_iniciar = ft.ElevatedButton(
         "Apito Inicial", icon=ft.Icons.PLAY_ARROW, height=45)
 
+    # Estado final do jogo mantido em referências mutáveis
     id_vencedor_final = [None]
+    gols_user_final = [0]
+    gols_bot_final = [0]
 
     def callback_continuar(e):
-        ao_finalizar_partida(id_vencedor_final[0])
+        try:
+            ao_finalizar_partida(
+                id_vencedor_final[0], gols_user_final[0], gols_bot_final[0])
+        except TypeError:
+            ao_finalizar_partida(id_vencedor_final[0])
 
     btn_continuar = ft.OutlinedButton(
-        "Continuar no Torneio", icon=ft.Icons.ARROW_FORWARD, visible=False, on_click=callback_continuar)
+        "Continuar", icon=ft.Icons.ARROW_FORWARD, visible=False, on_click=callback_continuar
+    )
 
     async def simular_jogo_visual():
         btn_iniciar.disabled = True
@@ -342,8 +363,8 @@ def carregar_partida(page: ft.Page, id_usuario: int, id_adversario: int, ao_fina
         casa = simulador.carregar_forca_do_time(id_time_user)
         fora = simulador.carregar_forca_do_time(id_time_bot)
 
-        # Calcula a posse alvo realista baseada na força dos meios-campos
-        posse_alvo_casa, _ = simulador.calcular_posse_base(casa['meio'], fora['meio'])
+        posse_alvo_casa, _ = simulador.calcular_posse_base(
+            casa['meio'], fora['meio'])
 
         stat_remates_casa = 0
         stat_remates_fora = 0
@@ -353,17 +374,15 @@ def carregar_partida(page: ft.Page, id_usuario: int, id_adversario: int, ao_fina
         page.update()
 
         for lance in range(1, 11):
-            await asyncio.sleep(0.7)
+            await asyncio.sleep(0.5)
             minuto = lance * 9
             tempo_jogo.value = f"{minuto}'"
 
-            # Flutuação natural da posse em torno da média esperada
             flutuacao = random.randint(-3, 3)
             posse_atual_casa = max(25, min(75, posse_alvo_casa + flutuacao))
             posse_user.value = f"{posse_atual_casa}%"
             posse_bot.value = f"{100 - posse_atual_casa}%"
 
-            # Determina quem cria a jogada de perigo
             poder_meio_total = max(1, casa['meio'] + fora['meio'])
             is_casa = random.randint(1, poder_meio_total) <= casa['meio']
 
@@ -373,7 +392,8 @@ def carregar_partida(page: ft.Page, id_usuario: int, id_adversario: int, ao_fina
             plantel_def = plantel_bot if is_casa else plantel_user
 
             forca_chute = atacante['ataque'] + random.randint(0, 100)
-            forca_bloqueio = (defensor['defesa'] * 1.3) + random.randint(0, 100)
+            forca_bloqueio = (defensor['defesa'] *
+                              1.3) + random.randint(0, 100)
 
             nome_atq = random.choice(plantel_atq['ATA'])
             nome_mei = random.choice(plantel_atq['MEI'])
@@ -388,19 +408,19 @@ def carregar_partida(page: ft.Page, id_usuario: int, id_adversario: int, ao_fina
 
                 sorteio_desfecho = random.random()
 
-                if sorteio_desfecho > 0.55:  # Golo
+                if sorteio_desfecho > 0.55:
                     atacante['gols'] += 1
                     cor_msg = ft.Colors.CYAN_300 if is_casa else ft.Colors.RED_400
                     feed_lances.controls.append(
                         ft.Text(f"⚽ [{minuto}'] GOOOOOOL DO {atacante['nome'].upper()}! {nome_mei} serve {nome_atq} que remata sem hipóteses!",
                                 color=cor_msg, weight=ft.FontWeight.BOLD)
                     )
-                elif sorteio_desfecho > 0.25:  # Defesa do Guarda-redes
+                elif sorteio_desfecho > 0.25:
                     feed_lances.controls.append(
                         ft.Text(f"💥 [{minuto}'] DEFENSAÇO! {nome_atq} remata forte mas {nome_gol} faz uma parada incrível!",
                                 color=ft.Colors.AMBER_300)
                     )
-                else:  # Remate para fora
+                else:
                     feed_lances.controls.append(
                         ft.Text(f"📐 [{minuto}'] PRA FORA! {nome_atq} ganha espaço na área, mas remata por cima da baliza.",
                                 color=ft.Colors.GREY_300)
@@ -431,11 +451,15 @@ def carregar_partida(page: ft.Page, id_usuario: int, id_adversario: int, ao_fina
                 fora['gols'] += 1
                 feed_lances.controls.append(ft.Text(
                     f"⚽ {nome_bot} venceu a disputa por penáltis!", color=ft.Colors.RED_400))
+
             gols_user.value = str(casa['gols'])
             gols_bot.value = str(fora['gols'])
 
         tempo_jogo.value = "90'"
         status_partida.value = "FIM DE JOGO!"
+
+        gols_user_final[0] = casa['gols']
+        gols_bot_final[0] = fora['gols']
 
         if casa['gols'] > fora['gols']:
             id_vencedor_final[0] = id_usuario

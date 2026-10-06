@@ -124,14 +124,14 @@ def carregar_loja(page: ft.Page, id_usuario: int, ao_voltar):
 
     txt_moedas = ft.Text(f"{moedas}", size=16,
                          weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
-    txt_diamantes = ft.Text(
-        f"{diamantes}", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
+    txt_diamantes = ft.Text(f"{diamantes}", size=16,
+                            weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
 
     header = ft.Container(
         content=ft.Row([
             ft.Row([
-                ft.IconButton(ft.Icons.ARROW_BACK,
-                              icon_color=ft.Colors.WHITE, on_click=lambda e: ao_voltar(id_usuario)),
+                ft.IconButton(ft.Icons.ARROW_BACK, icon_color=ft.Colors.WHITE,
+                              on_click=lambda e: ao_voltar(id_usuario)),
                 ft.Text("LOJA DE PACOTES", size=20,
                         weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
             ]),
@@ -139,7 +139,7 @@ def carregar_loja(page: ft.Page, id_usuario: int, ao_voltar):
                 ft.Container(
                     content=ft.Row([
                         ft.Icon(ft.Icons.MONETIZATION_ON,
-                                color=ft.Colors.AMBER, size=20),
+                                color=ft.Colors.AMBER_400, size=20),
                         txt_moedas
                     ], spacing=5),
                     bgcolor="#0F172A", padding=8, border_radius=8
@@ -158,7 +158,7 @@ def carregar_loja(page: ft.Page, id_usuario: int, ao_voltar):
     )
 
     def abrir_pacote(pacote):
-        nonlocal moedas, diamantes
+        nonlocal moedas, diamantes, id_time
         p_moedas = pacote["preco_moedas"]
         p_diamantes = pacote["preco_diamantes"]
 
@@ -177,7 +177,7 @@ def carregar_loja(page: ft.Page, id_usuario: int, ao_voltar):
             return
 
         descontar_saldo(id_usuario, id_time, p_moedas, p_diamantes)
-        id_time_u, moedas, diamantes = obter_saldos(id_usuario)
+        id_time, moedas, diamantes = obter_saldos(id_usuario)
 
         txt_moedas.value = str(moedas)
         txt_diamantes.value = str(diamantes)
@@ -185,7 +185,6 @@ def carregar_loja(page: ft.Page, id_usuario: int, ao_voltar):
         jog = gerar_jogador_pacote(
             id_time, pacote["estrelas_min"], pacote["estrelas_max"])
 
-        # Estilo de cor e fundo baseados nas estrelas do jogador
         estrelas = jog["estrelas"]
         if estrelas >= 5:
             cor_raridade = ft.Colors.CYAN_300
@@ -218,41 +217,21 @@ def carregar_loja(page: ft.Page, id_usuario: int, ao_voltar):
 
         card_jogador = ft.Container(
             content=ft.Column([
-                # Topo: Posição e Estrelas
                 ft.Row([
                     ft.Container(
                         content=ft.Text(
-                            jog["posicao"],
-                            size=11,
-                            weight=ft.FontWeight.BOLD,
-                            color=ft.Colors.BLACK
-                        ),
+                            jog["posicao"], size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.BLACK),
                         bgcolor=cor_raridade,
-                        padding=ft.padding.symmetric(
-                            horizontal=8, vertical=2),
+                        padding=ft.padding.symmetric(horizontal=8, vertical=2),
                         border_radius=4
                     ),
                     ft.Text("★" * estrelas, size=15, color=ft.Colors.AMBER_400)
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, width=270),
-
                 ft.Container(height=5),
-
-                # Ícone Central do Jogador
                 ft.Icon(name=ft.Icons.PERSON, size=60, color=ft.Colors.WHITE),
-
-                # Nome do Jogador
-                ft.Text(
-                    jog["nome"],
-                    size=17,
-                    weight=ft.FontWeight.BOLD,
-                    color=ft.Colors.WHITE,
-                    text_align=ft.TextAlign.CENTER,
-                    overflow=ft.TextOverflow.ELLIPSIS
-                ),
-
+                ft.Text(jog["nome"], size=17, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE,
+                        text_align=ft.TextAlign.CENTER, overflow=ft.TextOverflow.ELLIPSIS),
                 ft.Divider(color="#334155", thickness=1),
-
-                # Atributos Individuais
                 grid_stats
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.CENTER),
             width=290,
@@ -269,11 +248,8 @@ def carregar_loja(page: ft.Page, id_usuario: int, ao_voltar):
 
         dialog = ft.AlertDialog(
             bgcolor="#1E293B",
-            title=ft.Text("🎉 NOVO JOGADOR REVELADO!",
-                          color=ft.Colors.AMBER_400,
-                          weight=ft.FontWeight.BOLD,
-                          text_align=ft.TextAlign.CENTER,
-                          size=16),
+            title=ft.Text("🎉 NOVO JOGADOR REVELADO!", color=ft.Colors.AMBER_400,
+                          weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER, size=16),
             content=card_jogador,
             actions=[
                 ft.ElevatedButton(
@@ -297,13 +273,13 @@ def carregar_loja(page: ft.Page, id_usuario: int, ao_voltar):
     for p in PACOTES:
         custo_txt = f"{p['preco_moedas']} Moedas" if p['preco_moedas'] > 0 else f"{p['preco_diamantes']} Diamantes"
         icone_custo = ft.Icons.MONETIZATION_ON if p['preco_moedas'] > 0 else ft.Icons.DIAMOND
-        cor_custo = ft.Colors.AMBER if p['preco_moedas'] > 0 else ft.Colors.CYAN_300
+        cor_custo = ft.Colors.AMBER_400 if p['preco_moedas'] > 0 else ft.Colors.CYAN_300
 
         card = ft.Container(
             content=ft.Column([
                 ft.Icon(ft.Icons.CARD_GIFTCARD, size=48, color=p["cor"]),
-                ft.Text(p["nome"], size=16,
-                        weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                ft.Text(p["nome"], size=16, weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.WHITE),
                 ft.Text(p["desc"], size=11, color=ft.Colors.GREY_400),
                 ft.Container(height=5),
                 ft.ElevatedButton(

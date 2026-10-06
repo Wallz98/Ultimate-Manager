@@ -12,7 +12,7 @@ TATICAS = {
 
 
 def buscar_dados_elenco(id_usuario):
-    """Busca o time e todos os jogadores do banco de dados."""
+    """Busca o time e todos os jogadores do banco de dados, incluindo a energia."""
     conn = sqlite3.connect('meu_manager.db')
     cursor = conn.cursor()
 
@@ -27,7 +27,7 @@ def buscar_dados_elenco(id_usuario):
     id_time, nome_time = time_data
 
     cursor.execute("""
-        SELECT id, nome, posicao, titular, estrelas, velocidade, finalizacao, drible, passe, defesa
+        SELECT id, nome, posicao, titular, estrelas, velocidade, finalizacao, drible, passe, defesa, COALESCE(energia, 100)
         FROM jogadores
         WHERE id_time = ?
         ORDER BY 
@@ -57,7 +57,8 @@ def buscar_dados_elenco(id_usuario):
             "fin": j[6],
             "dri": j[7],
             "pas": j[8],
-            "def": j[9]
+            "def": j[9],
+            "energia": j[10]
         })
 
     return id_time, nome_time, jogadores
@@ -79,13 +80,20 @@ def salvar_titulares_db(jogadores):
 
 
 def criar_mini_card_titular(jogador, ao_remover):
-    """Cria o mini-card visual exclusivo para os Titulares."""
+    """Cria o mini-card visual exclusivo para os Titulares com barra/texto de energia."""
     cores_posicao = {
         "GOL": ft.colors.AMBER_700,
         "ZAG": ft.colors.BLUE_700,
         "MEI": ft.colors.GREEN_700,
         "ATA": ft.colors.RED_700
     }
+
+    e = jogador.get("energia", 100)
+    cor_energia = (
+        ft.colors.GREEN_400 if e >= 70
+        else ft.colors.AMBER_400 if e >= 40
+        else ft.colors.RED_400
+    )
 
     return ft.Container(
         content=ft.Column([
@@ -98,6 +106,8 @@ def criar_mini_card_titular(jogador, ao_remover):
                     padding=ft.padding.symmetric(horizontal=6, vertical=2),
                     border_radius=4
                 ),
+                ft.Text(f"⚡{e}%", size=9,
+                        weight=ft.FontWeight.BOLD, color=cor_energia),
                 ft.IconButton(
                     icon=ft.icons.CLOSE,
                     icon_size=12,
@@ -110,7 +120,7 @@ def criar_mini_card_titular(jogador, ao_remover):
                     color=ft.colors.WHITE, no_wrap=True),
             ft.Text("⭐ " * jogador["estrelas"], size=8)
         ], spacing=2, alignment=ft.MainAxisAlignment.CENTER),
-        width=130,
+        width=135,
         padding=8,
         bgcolor="#0F172A",
         border_radius=8,
@@ -120,7 +130,7 @@ def criar_mini_card_titular(jogador, ao_remover):
 
 
 def criar_card_reserva_completo(jogador, ao_escalar):
-    """Cria a exibição original em card/linha para os jogadores do banco de reservas."""
+    """Cria a exibição em card para os jogadores do banco de reservas com estado de energia."""
     cores_posicao = {
         "GOL": ft.colors.AMBER_700,
         "ZAG": ft.colors.BLUE_700,
@@ -128,6 +138,13 @@ def criar_card_reserva_completo(jogador, ao_escalar):
         "ATA": ft.colors.RED_700
     }
     cor_badge = cores_posicao.get(jogador["posicao"], ft.colors.GREY_700)
+
+    e = jogador.get("energia", 100)
+    cor_energia = (
+        ft.colors.GREEN_400 if e >= 70
+        else ft.colors.AMBER_400 if e >= 40
+        else ft.colors.RED_400
+    )
 
     if jogador["posicao"] == "GOL":
         r1, v1 = "VEL", jogador["vel"]
@@ -159,9 +176,9 @@ def criar_card_reserva_completo(jogador, ao_escalar):
                     padding=ft.padding.symmetric(horizontal=8, vertical=3),
                     border_radius=5
                 ),
+                ft.Text(f"⚡{e}%", size=11,
+                        weight=ft.FontWeight.BOLD, color=cor_energia),
                 ft.Text("⭐ " * jogador["estrelas"], size=11),
-                ft.Text("RESERVA", size=10, weight=ft.FontWeight.BOLD,
-                        color=ft.colors.GREY_500)
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
 
             ft.Divider(height=8, color=ft.colors.TRANSPARENT),
@@ -204,7 +221,7 @@ def carregar_elenco(page: ft.Page, id_usuario: int, ao_voltar_hub):
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
     page.vertical_alignment = ft.MainAxisAlignment.START
     page.padding = 20
-    page.scroll = ft.ScrollMode.AUTO  # Torna toda a página rolável
+    page.scroll = ft.ScrollMode.AUTO
 
     id_time, nome_time, jogadores = buscar_dados_elenco(id_usuario)
 
@@ -236,18 +253,15 @@ def carregar_elenco(page: ft.Page, id_usuario: int, ao_voltar_hub):
         pos = jogador["posicao"]
 
         if novo_status:
-            # Contagem atual de titulares na posição
             goleiros_atuais = sum(
                 1 for j in jogadores if j["titular"] and j["posicao"] == "GOL")
 
-            # Bloqueio estrito de 2 goleiros
             if pos == "GOL" and goleiros_atuais >= 1:
                 txt_status.value = "⚠️ É proibido ter mais de 1 Goleiro no time titular!"
                 txt_status.color = ft.colors.RED_400
                 page.update()
                 return
 
-            # Validação do limite máximo da posição na tática
             titulares_posicao = sum(
                 1 for j in jogadores if j["titular"] and j["posicao"] == pos)
             limite_posicao = tatica_atual[pos]
@@ -276,7 +290,6 @@ def carregar_elenco(page: ft.Page, id_usuario: int, ao_voltar_hub):
             if j["titular"]:
                 contagem[j["posicao"]] += 1
 
-        # Validação Rígida
         erros = []
         for pos, limite in tatica_atual.items():
             if contagem[pos] != limite:
@@ -297,7 +310,7 @@ def carregar_elenco(page: ft.Page, id_usuario: int, ao_voltar_hub):
     def renderizar_interface(e=None):
         tatica_req = TATICAS[drop_tatica.value]
 
-        # 1. Atualiza a Seção de Titulares (Apenas Mini Cards)
+        # 1. Atualiza Titulares
         painel_titulares.controls.clear()
         titulares = [j for j in jogadores if j["titular"]]
 
@@ -313,7 +326,7 @@ def carregar_elenco(page: ft.Page, id_usuario: int, ao_voltar_hub):
                         color=ft.colors.GREY_500, size=13)
             )
 
-        # 2. Atualiza a Seção de Reservas (Exibidos em Colunas por Posição)
+        # 2. Atualiza Reservas
         painel_reservas.controls.clear()
         seccoes_reservas = {"GOL": [], "ZAG": [], "MEI": [], "ATA": []}
 

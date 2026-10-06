@@ -1,114 +1,241 @@
-import sqlite3
+import math
 import random
+import sqlite3
 import flet as ft
+import os
 
+
+def conectar_bd():
+    # Define um caminho seguro com permissão de escrita no Android e no Windows
+    pasta_dados = os.getenv("ANDROID_DATA", os.path.expanduser("~"))
+    caminho_bd = os.path.join(pasta_dados, "meu_manager.db")
+    return sqlite3.connect(caminho_bd)
+
+# --- LISTAS DE DADOS E NOMES ---
 NOMES_TIMES = [
     "Real Vila", "Inter do Vale", "União Central", "Atlético Campestre",
     "Estrela do Norte", "Sporting Litoral", "Cruzeiro do Sul", "Guarani Urbano",
     "Académica FC", "Imperial FC", "Vanguardas SC", "FC Metropolitano", "So kanela FC",
     "Lobos da Serra", "Dragões do Oeste", "Falcões do Norte", "Tigres do Sul",
-    "Batinga FC", "Sao Thome FC"
+    "Batinga FC", "Sao Thome FC", "Flamengo", "Palmeiras", "São Paulo"
 ]
 
 NOMES_JOGADORES = [
     "Gabriel", "Lucas", "Matheus", "Pedro", "Enzo", "João", "Felipe", "Bruno",
     "Thiago", "Rodrigo", "Rafael", "Gustavo", "Vinicius", "Caio", "Daniel",
-    "Murilo", "Vitor", "Diego", "Gerson", "Leandro", "André", "Marcelo",
+    "Murilo", "Vitor", "Diego", "Gerson", "Leandro", "André", "Marcelo", "Jonathan",
     "Fábio", "Renan", "Cauã", "Davi", "Samuel", "Emanuel", "Hugo", "Wallace",
     "César", "Alex", "Wesley", "Iago", "Nathan", "Luan", "Rômulo", "Elias",
-    "Bruno Henrique", "Jean", "Ruan", "Pablo", "Carlos", "Vinícius", "Luiz", "Rafael", "Guilherme", "Fernando", "Levi"
+    "Bruno Henrique", "Jean", "Ruan", "Pablo", "Carlos", "Vinícius", "Luiz", "Rafael",
+    "Guilherme", "Fernando", "Levi", "Zé"
 ]
 
 SOBRENOMES_JOGADORES = [
     "Silva", "Santos", "Oliveira", "Souza", "Lima", "Ferreira", "Costa",
     "Pereira", "Carvalho", "Rosa", "Almeida", "Mendes", "Ribeiro", "Barbosa",
-    "Cardoso", "Moura", "Teixeira", "Campos", "Nunes", "Gomes", "Martins", "Rocha", "Dias", "Freitas", "Cavalcante", "Azevedo", "Monteiro",
+    "Cardoso", "Moura", "Teixeira", "Campos", "Nunes", "Gomes", "Martins", "Rocha",
+    "Dias", "Freitas", "Cavalcante", "Azevedo", "Monteiro"
 ]
 
-LISTA_CORES = ["Azul", "Vermelho", "Preto",
-               "Branco", "Amarelo", "Verde", "Laranja", "Roxo"]
-
-# Aliases de compatibilidade para a loja.py
 NOMES = NOMES_JOGADORES
 SOBRENOMES = SOBRENOMES_JOGADORES
 
-# Mapeamento de nomes de cores para cores do Flet
+LISTA_CORES = ["Azul", "Vermelho", "Preto",
+               "Branco", "Amarelo", "Verde", "Laranja", "Roxo"]
+FORMATOS_ESCUDO = ["Clássico", "Losango",
+                   "Redondo", "Moderno", "Gótico", "Italiano"]
+
 MAPA_CORES = {
-    "Azul": ft.Colors.BLUE_700,
-    "Vermelho": ft.Colors.RED_700,
-    "Preto": ft.Colors.BLACK87,
-    "Branco": ft.Colors.WHITE,
-    "Amarelo": ft.Colors.AMBER_400,
-    "Verde": ft.Colors.GREEN_700,
-    "Laranja": ft.Colors.ORANGE_700,
-    "Roxo": ft.Colors.PURPLE_700
+    "Azul": ft.colors.BLUE_700,
+    "Vermelho": ft.colors.RED_700,
+    "Preto": ft.colors.BLACK87,
+    "Branco": ft.colors.WHITE,
+    "Amarelo": ft.colors.AMBER,
+    "Verde": ft.colors.GREEN_700,
+    "Laranja": ft.colors.ORANGE_700,
+    "Roxo": ft.colors.PURPLE_700
 }
+CORES = MAPA_CORES
+
+ICONES = {
+    "Estrela": ft.icons.STAR_ROUNDED,
+    "Escudo": ft.icons.SHIELD,
+    "Raio": ft.icons.FLASH_ON,
+    "Fogo": ft.icons.LOCAL_FIRE_DEPARTMENT,
+    "Bola": ft.icons.SPORTS_SOCCER,
+    "Medalha": ft.icons.MILITARY_TECH,
+    "Coroa": ft.icons.WORKSPACE_PREMIUM,
+    "Castelo": ft.icons.FORT
+}
+LISTA_SIMBOLOS = list(ICONES.keys())
+
+
+def garantir_colunas(cursor):
+    """Garante a existência das colunas necessárias na tabela 'times'."""
+    for col, default in [('formato', "'Losango'"), ('simbolo', "'Bola'")]:
+        try:
+            cursor.execute(
+                f"ALTER TABLE times ADD COLUMN {col} TEXT DEFAULT {default}")
+        except sqlite3.OperationalError:
+            pass
 
 
 def obter_cor_flet(cor_str):
-    """Converte o nome da cor ou hex num valor de cor válido do Flet."""
     if not cor_str:
-        return ft.Colors.BLUE_700
+        return ft.colors.BLUE_700
     if isinstance(cor_str, str) and cor_str in MAPA_CORES:
         return MAPA_CORES[cor_str]
     return cor_str
 
 
-def criar_escudo_time(sigla="FC", cor_principal="Azul", cor_secundaria="Vermelho", cor_borda="Amarelo", cor_texto="Branco", tamanho=75):
-    """
-    🛡️ Cria e devolve o componente visual (ft.Container) do escudo do clube.
-    Aplica as 4 cores configuradas no registo da equipa.
-    """
-    c1 = obter_cor_flet(cor_principal)
-    c2 = obter_cor_flet(cor_secundaria)
-    c3 = obter_cor_flet(cor_borda)
-    c_txt = obter_cor_flet(cor_texto)
+def obter_formatos_escala(escala: float):
+    return {
+        "Clássico": (
+            140 * escala, 160 * escala, 124 * escala, 144 * escala,
+            ft.border_radius.only(
+                bottom_left=70 * escala, bottom_right=70 * escala,
+                top_left=10 * escala, top_right=10 * escala
+            ),
+            ft.border_radius.only(
+                bottom_left=62 * escala, bottom_right=62 * escala,
+                top_left=6 * escala, top_right=6 * escala
+            ),
+            0
+        ),
+        "Losango": (
+            130 * escala, 130 * escala, 114 * escala, 114 * escala,
+            ft.border_radius.all(16 * escala),
+            ft.border_radius.all(10 * escala),
+            math.pi / 4
+        ),
+        "Redondo": (
+            140 * escala, 140 * escala, 124 * escala, 124 * escala,
+            ft.border_radius.all(70 * escala),
+            ft.border_radius.all(62 * escala),
+            0
+        ),
+        "Moderno": (
+            140 * escala, 160 * escala, 124 * escala, 144 * escala,
+            ft.border_radius.all(25 * escala),
+            ft.border_radius.all(18 * escala),
+            0
+        ),
+        "Gótico": (
+            140 * escala, 160 * escala, 124 * escala, 144 * escala,
+            ft.border_radius.only(
+                bottom_left=25 * escala, bottom_right=25 * escala,
+                top_left=50 * escala, top_right=50 * escala
+            ),
+            ft.border_radius.only(
+                bottom_left=18 * escala, bottom_right=18 * escala,
+                top_left=42 * escala, top_right=42 * escala
+            ),
+            0
+        ),
+        "Italiano": (
+            140 * escala, 160 * escala, 124 * escala, 144 * escala,
+            ft.border_radius.only(
+                bottom_left=15 * escala, bottom_right=15 * escala,
+                top_left=70 * escala, top_right=70 * escala
+            ),
+            ft.border_radius.only(
+                bottom_left=8 * escala, bottom_right=8 * escala,
+                top_left=62 * escala, top_right=62 * escala
+            ),
+            0
+        )
+    }
 
-    largura = tamanho
-    altura = int(tamanho * 1.15)
-    tamanho_fonte = int(tamanho * 0.32)
+
+def criar_escudo_time(
+    formato="Losango",
+    simbolo="Bola",
+    cor_principal="Azul",
+    cor_secundaria="Vermelho",
+    cor_borda="Amarelo",
+    cor_texto="Branco",
+    tamanho=140,
+    **kwargs
+):
+    formato = kwargs.get('escudo_formato', formato)
+    simbolo = kwargs.get('icone', kwargs.get('simbolo_escudo', simbolo))
+    cor_principal = kwargs.get('cor_1', kwargs.get('c1', cor_principal))
+    cor_secundaria = kwargs.get('cor_2', kwargs.get('c2', cor_secundaria))
+    cor_borda = kwargs.get('cor_3', kwargs.get('c3', cor_borda))
+    cor_texto = kwargs.get('cor_4', kwargs.get('c4', cor_texto))
+
+    bg_miolo = obter_cor_flet(cor_principal)
+    bg_listras = obter_cor_flet(cor_secundaria)
+    bg_borda = obter_cor_flet(cor_borda)
+    color_icone = obter_cor_flet(cor_texto)
+
+    icone_nome = ICONES.get(simbolo, ft.icons.SPORTS_SOCCER)
+
+    escala = tamanho / 140.0
+    formatos = obter_formatos_escala(escala)
+
+    fmt_chave = str(formato or "Losango")
+    if fmt_chave not in formatos:
+        fmt_chave = "Losango"
+
+    w_ext, h_ext, w_int, h_int, borda_ext, borda_int, angulo = formatos[fmt_chave]
+
+    listra1 = ft.Container(
+        width=25 * escala, height=180 * escala, bgcolor=bg_listras)
+    listra2 = ft.Container(
+        width=25 * escala, height=180 * escala, bgcolor=bg_listras)
+    listra3 = ft.Container(
+        width=25 * escala, height=180 * escala, bgcolor=bg_listras)
+
+    painel_listras = ft.Row(
+        [listra1, listra2, listra3],
+        spacing=30 * escala,
+        alignment=ft.MainAxisAlignment.CENTER
+    )
+
+    icone_centro = ft.Icon(
+        name=icone_nome,
+        size=50 * escala,
+        color=color_icone,
+        rotate=ft.Rotate(angle=-angulo)
+    )
+
+    miolo_escudo = ft.Container(
+        content=ft.Stack([
+            painel_listras,
+            ft.Container(content=icone_centro, alignment=ft.alignment.center)
+        ]),
+        width=w_int,
+        height=h_int,
+        bgcolor=bg_miolo,
+        border_radius=borda_int,
+        alignment=ft.alignment.center,
+        clip_behavior=ft.ClipBehavior.HARD_EDGE
+    )
+
+    escudo = ft.Container(
+        content=miolo_escudo,
+        width=w_ext,
+        height=h_ext,
+        bgcolor=bg_borda,
+        padding=8 * escala,
+        border_radius=borda_ext,
+        alignment=ft.alignment.center,
+        rotate=ft.Rotate(angle=angulo),
+        shadow=ft.BoxShadow(
+            blur_radius=10 * escala, color=ft.colors.BLACK26, offset=ft.Offset(0, 5 * escala)
+        )
+    )
 
     return ft.Container(
-        content=ft.Stack([
-            # Listras do Fundo
-            ft.Row([
-                ft.Container(width=int(largura * 0.28),
-                             height=altura, bgcolor=c2),
-                ft.Container(width=int(largura * 0.28),
-                             height=altura, bgcolor=c1),
-                ft.Container(width=int(largura * 0.28),
-                             height=altura, bgcolor=c2),
-            ], alignment=ft.MainAxisAlignment.CENTER, spacing=2),
-
-            # Sigla / Nome do Clube
-            ft.Container(
-                content=ft.Text(
-                    sigla[:3].upper(),
-                    size=tamanho_fonte,
-                    weight=ft.FontWeight.BOLD,
-                    color=c_txt
-                ),
-                alignment=ft.alignment.center
-            )
-        ]),
-        width=largura,
-        height=altura,
-        bgcolor=c1,
-        padding=2,
-        border=ft.border.all(max(2, int(tamanho * 0.05)), c3),
-        border_radius=ft.border_radius.only(
-            bottom_left=int(largura * 0.45),
-            bottom_right=int(largura * 0.45),
-            top_left=int(largura * 0.1),
-            top_right=int(largura * 0.1)
-        ),
-        clip_behavior=ft.ClipBehavior.HARD_EDGE,
+        content=escudo,
+        width=180 * escala,
+        height=180 * escala,
         alignment=ft.alignment.center
     )
 
 
 def sortear_cores():
-    """Retorna uma tupla com 4 cores sorteadas aleatoriamente."""
     return (
         random.choice(LISTA_CORES),
         random.choice(LISTA_CORES),
@@ -118,7 +245,6 @@ def sortear_cores():
 
 
 def calcular_estrelas(media):
-    """Calcula o número de estrelas baseado na média dos atributos."""
     if media < 25:
         return 1
     elif media < 45:
@@ -132,7 +258,6 @@ def calcular_estrelas(media):
 
 
 def gerar_elenco(id_time, nivel_base=1):
-    """Gera um plantel de 18 jogadores com teto de 99 nos atributos e estrelas dinâmicas."""
     elenco = []
     distribuicao = ['GOL', 'GOL', 'ZAG', 'ZAG', 'ZAG', 'ZAG', 'ZAG', 'ZAG',
                     'MEI', 'MEI', 'MEI', 'MEI', 'MEI', 'MEI', 'ATA', 'ATA', 'ATA', 'ATA']
@@ -170,7 +295,6 @@ def gerar_elenco(id_time, nivel_base=1):
 
         media = (vel + fin + dri + pas + defesa) / 5.0
         estrelas = calcular_estrelas(media)
-
         titular = 1 if len(elenco) < 11 else 0
 
         elenco.append((id_time, nome, posicao, titular,
@@ -179,24 +303,26 @@ def gerar_elenco(id_time, nivel_base=1):
     return elenco
 
 
-def gerar_time_torneio(nome_time, estrelas):
-    """Gera um time BOT para torneios com 11 titulares e cores aleatórias."""
+def gerar_time_torneio(nome_time, estrelas_bot=1):
+    """Gera uma equipa BOT para torneios com formato, símbolo e cores totalmente aleatórios."""
     conn = sqlite3.connect('meu_manager.db')
     cursor = conn.cursor()
+    garantir_colunas(cursor)
 
     c1, c2, c3, c4 = sortear_cores()
+    formato_bot = random.choice(FORMATOS_ESCUDO)
+    simbolo_bot = random.choice(LISTA_SIMBOLOS)
 
     cursor.execute("""
-        INSERT INTO times (nome, is_bot, cor_1, cor_2, cor_3, cor_4, moedas_free, moedas_missao)
-        VALUES (?, 1, ?, ?, ?, ?, 0, 0)
-    """, (nome_time, c1, c2, c3, c4))
+        INSERT INTO times (nome, formato, simbolo, is_bot, cor_1, cor_2, cor_3, cor_4, moedas_free, moedas_missao)
+        VALUES (?, ?, ?, 1, ?, ?, ?, ?, 0, 0)
+    """, (nome_time, formato_bot, simbolo_bot, c1, c2, c3, c4))
 
     id_time = cursor.lastrowid
 
-    min_stat = 40 + (estrelas * 8)
-    max_stat = 50 + (estrelas * 8)
-
-    posicoes = ["GOL", "DEF", "DEF", "DEF", "DEF",
+    min_stat = 40 + (estrelas_bot * 8)
+    max_stat = 50 + (estrelas_bot * 8)
+    posicoes = ["GOL", "ZAG", "ZAG", "ZAG", "ZAG",
                 "MEI", "MEI", "MEI", "ATA", "ATA", "ATA"]
 
     for pos in posicoes:
@@ -210,22 +336,22 @@ def gerar_time_torneio(nome_time, estrelas):
         cursor.execute("""
             INSERT INTO jogadores (id_time, nome, posicao, titular, estrelas, velocidade, finalizacao, drible, passe, defesa)
             VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
-        """, (id_time, nome_j, pos, estrelas, vel, fin, dri, pas, dfe))
+        """, (id_time, nome_j, pos, estrelas_bot, vel, fin, dri, pas, dfe))
 
     conn.commit()
     conn.close()
     return id_time
 
 
-def criar_time_usuario(id_usuario, nome_time, cor_1="Azul", cor_2="Vermelho", cor_3="Amarelo", cor_4="Branco"):
-    """Cria a equipa do jogador com moedas e 18 jogadores iniciais."""
+def criar_time_usuario(id_usuario, nome_time, cor_1="Azul", cor_2="Vermelho", cor_3="Amarelo", cor_4="Branco", formato="Losango", simbolo="Bola", **kwargs):
     conn = sqlite3.connect('meu_manager.db')
     cursor = conn.cursor()
+    garantir_colunas(cursor)
 
     cursor.execute('''
-        INSERT INTO times (id_usuario, nome, is_bot, cor_1, cor_2, cor_3, cor_4, moedas_free, moedas_missao) 
-        VALUES (?, ?, 0, ?, ?, ?, ?, 1000, 50)
-    ''', (id_usuario, nome_time, cor_1, cor_2, cor_3, cor_4))
+        INSERT INTO times (id_usuario, nome, formato, simbolo, is_bot, cor_1, cor_2, cor_3, cor_4, moedas_free, moedas_missao) 
+        VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, 1000, 50)
+    ''', (id_usuario, nome_time, formato, simbolo, cor_1, cor_2, cor_3, cor_4))
 
     id_time = cursor.lastrowid
     jogadores = gerar_elenco(id_time, nivel_base=1)
@@ -237,20 +363,23 @@ def criar_time_usuario(id_usuario, nome_time, cor_1="Azul", cor_2="Vermelho", co
 
     conn.commit()
     conn.close()
-    print(f"✅ Equipa '{nome_time}' criada com sucesso!")
+    return id_time
 
 
 def criar_time_bot(nome_time, nivel_estrelas=1):
-    """Cria uma equipa BOT completa com cores aleatórias para partidas amistosas/simulações."""
+    """Cria uma equipa BOT completa com formato, símbolo e cores aleatórias."""
     conn = sqlite3.connect('meu_manager.db')
     cursor = conn.cursor()
+    garantir_colunas(cursor)
 
     c1, c2, c3, c4 = sortear_cores()
+    formato_bot = random.choice(FORMATOS_ESCUDO)
+    simbolo_bot = random.choice(LISTA_SIMBOLOS)
 
     cursor.execute('''
-        INSERT INTO times (id_usuario, nome, is_bot, cor_1, cor_2, cor_3, cor_4) 
-        VALUES (NULL, ?, 1, ?, ?, ?, ?)
-    ''', (nome_time, c1, c2, c3, c4))
+        INSERT INTO times (id_usuario, nome, formato, simbolo, is_bot, cor_1, cor_2, cor_3, cor_4, moedas_free, moedas_missao) 
+        VALUES (NULL, ?, ?, ?, 1, ?, ?, ?, ?, 0, 0)
+    ''', (nome_time, formato_bot, simbolo_bot, c1, c2, c3, c4))
 
     id_time = cursor.lastrowid
     jogadores = gerar_elenco(id_time, nivel_base=nivel_estrelas)
@@ -262,4 +391,4 @@ def criar_time_bot(nome_time, nivel_estrelas=1):
 
     conn.commit()
     conn.close()
-    print(f"🤖 BOT '{nome_time}' criado com cores aleatórias!")
+    return id_time

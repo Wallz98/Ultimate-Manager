@@ -3,7 +3,7 @@ import hashlib
 
 
 def inicializar_banco():
-    """Inicializa a estrutura do banco de dados do zero com suporte a diamantes e cores personalizadas."""
+    """Inicializa a estrutura do banco de dados do zero com suporte a formato, energia, diamantes e cores personalizadas."""
     conn = sqlite3.connect('meu_manager.db')
     cursor = conn.cursor()
     cursor.execute('PRAGMA foreign_keys = ON;')
@@ -21,12 +21,13 @@ def inicializar_banco():
     )
     ''')
 
-    # 2. Tabela: Times (Com colunas de cores independentes)
+    # 2. Tabela: Times (Com formato do escudo e cores independentes)
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS times (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         id_usuario INTEGER, 
         nome TEXT NOT NULL,
+        formato TEXT DEFAULT 'Clássico',
         is_bot BOOLEAN DEFAULT 0,
         cor_1 TEXT DEFAULT 'Azul',
         cor_2 TEXT DEFAULT 'Vermelho',
@@ -40,16 +41,21 @@ def inicializar_banco():
     )
     ''')
 
-    # Garantia de retrocompatibilidade para adicionar colunas de cores em bancos legados
-    colunas_novas = ['cor_1', 'cor_2', 'cor_3', 'cor_4']
-    for col in colunas_novas:
+    # Migrações preventivas para bases existentes ou atualizações futuras
+    colunas_novas_times = [
+        ('formato', "TEXT DEFAULT 'Clássico'"),
+        ('cor_1', "TEXT DEFAULT 'Azul'"),
+        ('cor_2', "TEXT DEFAULT 'Vermelho'"),
+        ('cor_3', "TEXT DEFAULT 'Amarelo'"),
+        ('cor_4', "TEXT DEFAULT 'Branco'")
+    ]
+    for col, tipo in colunas_novas_times:
         try:
-            cursor.execute(
-                f"ALTER TABLE times ADD COLUMN {col} TEXT DEFAULT 'Branco'")
+            cursor.execute(f"ALTER TABLE times ADD COLUMN {col} {tipo}")
         except sqlite3.OperationalError:
             pass
 
-    # 3. Tabela: Jogadores
+    # 3. Tabela: Jogadores (com coluna 'energia')
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS jogadores (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,9 +69,16 @@ def inicializar_banco():
         drible INTEGER DEFAULT 10,
         passe INTEGER DEFAULT 10,
         defesa INTEGER DEFAULT 10,
+        energia INTEGER DEFAULT 100,
         FOREIGN KEY (id_time) REFERENCES times (id) ON DELETE CASCADE
     )
     ''')
+
+    try:
+        cursor.execute(
+            "ALTER TABLE jogadores ADD COLUMN energia INTEGER DEFAULT 100")
+    except sqlite3.OperationalError:
+        pass
 
     conn.commit()
     conn.close()
