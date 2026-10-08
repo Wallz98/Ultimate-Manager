@@ -34,21 +34,11 @@ PALETAS_VARIADAS = [
      ft.Colors.INDIGO_900, ft.Colors.WHITE)
 ]
 
-ICONES_BOT = [
-    ft.Icons.SHIELD,
-    ft.Icons.FLASH_ON,
-    ft.Icons.LOCAL_FIRE_DEPARTMENT,
-    ft.Icons.SPORTS_SOCCER,
-    ft.Icons.MILITARY_TECH,
-    ft.Icons.WORKSPACE_PREMIUM,
-    ft.Icons.FORT
-]
 
-
-def construir_escudo(cor1=None, cor2=None, cor3=None, cor4=None, formato="Clássico", tamanho=1.0, is_bot=False, seed_id=1):
+def construir_escudo(cor1=None, cor2=None, cor3=None, cor4=None, formato="Clássico", simbolo="Bola", tamanho=1.0, seed_id=1):
     rnd = random.Random(seed_id)
 
-    if is_bot or cor1 is None:
+    if not cor1:
         c1, c2, c3, c4 = rnd.choice(PALETAS_VARIADAS)
     else:
         c1 = CORES.get(cor1, ft.Colors.BLUE_700) if isinstance(
@@ -60,51 +50,80 @@ def construir_escudo(cor1=None, cor2=None, cor3=None, cor4=None, formato="Cláss
         c4 = CORES.get(cor4, ft.Colors.WHITE) if isinstance(
             cor4, str) else cor4
 
-    # Ajusta o formato/borda conforme a opção do time
     fmt = str(formato or "Clássico").lower()
-    if "redond" in fmt or "círculo" in fmt or "circulo" in fmt:
-        raio_borda = ft.border_radius.all(int(45 * tamanho))
-    elif "losang" in fmt or "diamante" in fmt:
-        raio_borda = ft.border_radius.only(
-            top_left=int(40 * tamanho),
-            bottom_right=int(40 * tamanho),
-            top_right=int(6 * tamanho),
-            bottom_left=int(6 * tamanho)
+
+    # Mapeia o símbolo a partir das opções do gerador
+    icone_nome = gerador.ICONES.get(simbolo, ft.Icons.SPORTS_SOCCER)
+    icone_centro = ft.Icon(name=icone_nome, size=32 * tamanho, color=c4)
+
+    listra1 = ft.Container(width=10 * tamanho, height=90 * tamanho, bgcolor=c2)
+    listra2 = ft.Container(width=10 * tamanho, height=90 * tamanho, bgcolor=c2)
+    listra3 = ft.Container(width=10 * tamanho, height=90 * tamanho, bgcolor=c2)
+
+    painel_listras = ft.Row([listra1, listra2, listra3],
+                            spacing=5 * tamanho, alignment=ft.MainAxisAlignment.CENTER)
+
+    # Formato Losango / Diamante Reto
+    if "losang" in fmt or "diamante" in fmt:
+        miolo = ft.Container(
+            content=ft.Container(
+                content=ft.Stack([
+                    painel_listras,
+                    ft.Container(content=icone_centro,
+                                 alignment=ft.alignment.center)
+                ]),
+                rotate=ft.Rotate(angle=-0.785398),
+                alignment=ft.alignment.center
+            ),
+            width=52 * tamanho,
+            height=52 * tamanho,
+            bgcolor=c1,
+            border_radius=ft.border_radius.all(int(6 * tamanho)),
+            alignment=ft.alignment.center,
+            clip_behavior=ft.ClipBehavior.HARD_EDGE
         )
+
+        moldura = ft.Container(
+            content=miolo,
+            width=62 * tamanho,
+            height=62 * tamanho,
+            bgcolor=c3,
+            border_radius=ft.border_radius.all(int(8 * tamanho)),
+            alignment=ft.alignment.center,
+            rotate=ft.Rotate(angle=0.785398),
+            shadow=ft.BoxShadow(blur_radius=8, color=ft.Colors.BLACK38)
+        )
+
+        return ft.Container(
+            content=moldura,
+            width=90 * tamanho,
+            height=100 * tamanho,
+            alignment=ft.alignment.center,
+            rotate=None
+        )
+
+    # Ajuste de bordas de acordo com o formato
+    if "italiano" in fmt or "italiana" in fmt:
+        raio_borda = ft.border_radius.only(
+            bottom_left=int(8 * tamanho), bottom_right=int(8 * tamanho),
+            top_left=int(40 * tamanho), top_right=int(40 * tamanho)
+        )
+    elif "redond" in fmt or "círculo" in fmt or "circulo" in fmt:
+        raio_borda = ft.border_radius.all(int(45 * tamanho))
     elif "quadrad" in fmt:
         raio_borda = ft.border_radius.all(int(10 * tamanho))
+    elif "modern" in fmt:
+        raio_borda = ft.border_radius.all(int(16 * tamanho))
+    elif "gótic" in fmt or "gotic" in fmt:
+        raio_borda = ft.border_radius.only(
+            bottom_left=int(16 * tamanho), bottom_right=int(16 * tamanho),
+            top_left=int(32 * tamanho), top_right=int(32 * tamanho)
+        )
     else:  # "Clássico" / Padrão
         raio_borda = ft.border_radius.only(
             bottom_left=int(45 * tamanho), bottom_right=int(45 * tamanho),
             top_left=int(6 * tamanho), top_right=int(6 * tamanho)
         )
-
-    icone_centro = ft.Icon(name=ft.Icons.STAR_ROUNDED,
-                           size=35 * tamanho, color=c4)
-
-    if is_bot:
-        icone_escolhido = rnd.choice(ICONES_BOT)
-        estilo_borda = rnd.randint(1, 3)
-        icone_centro = ft.Icon(name=icone_escolhido,
-                               size=35 * tamanho, color=c4)
-
-        if estilo_borda == 1:
-            raio_borda = ft.border_radius.all(int(20 * tamanho))
-        elif estilo_borda == 2:
-            raio_borda = ft.border_radius.only(
-                bottom_left=int(20 * tamanho), bottom_right=int(20 * tamanho),
-                top_left=int(40 * tamanho), top_right=int(40 * tamanho)
-            )
-
-    listra1 = ft.Container(
-        width=12 * tamanho, height=100 * tamanho, bgcolor=c2)
-    listra2 = ft.Container(
-        width=12 * tamanho, height=100 * tamanho, bgcolor=c2)
-    listra3 = ft.Container(
-        width=12 * tamanho, height=100 * tamanho, bgcolor=c2)
-
-    painel_listras = ft.Row([listra1, listra2, listra3],
-                            spacing=6 * tamanho, alignment=ft.MainAxisAlignment.CENTER)
 
     miolo = ft.Container(
         content=ft.Stack([
@@ -131,8 +150,29 @@ def construir_escudo(cor1=None, cor2=None, cor3=None, cor4=None, formato="Cláss
     )
 
 
+def obter_widget_escudo(escudo_path, c1, c2, c3, c4, formato, simbolo="Bola", tamanho=0.9, seed_id=1):
+    """Renderiza a imagem se 'escudo_path' for um arquivo válido, senão constrói o escudo dinâmico."""
+    if escudo_path and isinstance(escudo_path, str) and (
+        escudo_path.startswith(
+            "assets/") or "/" in escudo_path or "\\" in escudo_path or escudo_path.endswith((".png", ".jpg", ".jpeg", ".svg"))
+    ):
+        return ft.Container(
+            width=90 * tamanho,
+            height=100 * tamanho,
+            alignment=ft.alignment.center,
+            rotate=None,
+            content=ft.Image(
+                src=escudo_path,
+                width=80 * tamanho,
+                height=90 * tamanho,
+                fit=ft.ImageFit.CONTAIN
+            )
+        )
+    return construir_escudo(cor1=c1, cor2=c2, cor3=c3, cor4=c4, formato=formato, simbolo=simbolo, tamanho=tamanho, seed_id=seed_id)
+
+
 def buscar_titulares_detalhados(id_time):
-    conn = sqlite3.connect('meu_manager.db')
+    conn = gerador.conectar_bd()
     cursor = conn.cursor()
     cursor.execute("""
         SELECT nome, posicao, estrelas, velocidade, finalizacao, drible, passe, defesa 
@@ -169,7 +209,7 @@ def criar_painel_elenco_horizontal(id_time):
 
 
 def obter_nomes_plantel(id_time):
-    conn = sqlite3.connect('meu_manager.db')
+    conn = gerador.conectar_bd()
     cursor = conn.cursor()
     cursor.execute(
         "SELECT nome, posicao FROM jogadores WHERE id_time = ? AND titular = 1", (id_time,))
@@ -198,12 +238,17 @@ def obter_nomes_plantel(id_time):
 
 
 def preparar_dados_partida(id_usuario, id_adversario=None):
-    conn = sqlite3.connect('meu_manager.db')
+    conn = gerador.conectar_bd()
     cursor = conn.cursor()
 
-    cursor.execute(
-        "SELECT id, nome, COALESCE(formato, 'Clássico'), cor_1, cor_2, cor_3, cor_4 FROM times WHERE id_usuario = ?", (id_usuario,))
-    user_time = cursor.fetchone()
+    try:
+        cursor.execute(
+            "SELECT id, nome, COALESCE(formato, 'Clássico'), COALESCE(simbolo, 'Bola'), cor_1, cor_2, cor_3, cor_4, escudo FROM times WHERE id_usuario = ?", (id_usuario,))
+        user_time = cursor.fetchone()
+    except sqlite3.OperationalError:
+        cursor.execute(
+            "SELECT id, nome, COALESCE(formato, 'Clássico'), COALESCE(simbolo, 'Bola'), cor_1, cor_2, cor_3, cor_4, NULL as escudo FROM times WHERE id_usuario = ?", (id_usuario,))
+        user_time = cursor.fetchone()
 
     if user_time:
         cursor.execute(
@@ -214,22 +259,37 @@ def preparar_dados_partida(id_usuario, id_adversario=None):
             conn.commit()
 
     if id_adversario:
-        cursor.execute(
-            "SELECT id, nome, COALESCE(formato, 'Clássico'), cor_1, cor_2, cor_3, cor_4 FROM times WHERE id = ?", (id_adversario,))
-        bot_time = cursor.fetchone()
+        try:
+            cursor.execute(
+                "SELECT id, nome, COALESCE(formato, 'Clássico'), COALESCE(simbolo, 'Bola'), cor_1, cor_2, cor_3, cor_4, escudo FROM times WHERE id = ?", (id_adversario,))
+            bot_time = cursor.fetchone()
+        except sqlite3.OperationalError:
+            cursor.execute(
+                "SELECT id, nome, COALESCE(formato, 'Clássico'), COALESCE(simbolo, 'Bola'), cor_1, cor_2, cor_3, cor_4, NULL as escudo FROM times WHERE id = ?", (id_adversario,))
+            bot_time = cursor.fetchone()
     else:
-        cursor.execute(
-            "SELECT id, nome, COALESCE(formato, 'Clássico'), cor_1, cor_2, cor_3, cor_4 FROM times WHERE is_bot = 1 ORDER BY RANDOM() LIMIT 1")
-        bot_time = cursor.fetchone()
+        try:
+            cursor.execute(
+                "SELECT id, nome, COALESCE(formato, 'Clássico'), COALESCE(simbolo, 'Bola'), cor_1, cor_2, cor_3, cor_4, escudo FROM times WHERE is_bot = 1 ORDER BY RANDOM() LIMIT 1")
+            bot_time = cursor.fetchone()
+        except sqlite3.OperationalError:
+            cursor.execute(
+                "SELECT id, nome, COALESCE(formato, 'Clássico'), COALESCE(simbolo, 'Bola'), cor_1, cor_2, cor_3, cor_4, NULL as escudo FROM times WHERE is_bot = 1 ORDER BY RANDOM() LIMIT 1")
+            bot_time = cursor.fetchone()
 
     if not bot_time:
         conn.close()
         id_bot = gerador.gerar_time_torneio("FC Metropolitano", 2)
-        conn = sqlite3.connect('meu_manager.db')
+        conn = gerador.conectar_bd()
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT id, nome, COALESCE(formato, 'Clássico'), cor_1, cor_2, cor_3, cor_4 FROM times WHERE id = ?", (id_bot,))
-        bot_time = cursor.fetchone()
+        try:
+            cursor.execute(
+                "SELECT id, nome, COALESCE(formato, 'Clássico'), COALESCE(simbolo, 'Bola'), cor_1, cor_2, cor_3, cor_4, escudo FROM times WHERE id = ?", (id_bot,))
+            bot_time = cursor.fetchone()
+        except sqlite3.OperationalError:
+            cursor.execute(
+                "SELECT id, nome, COALESCE(formato, 'Clássico'), COALESCE(simbolo, 'Bola'), cor_1, cor_2, cor_3, cor_4, NULL as escudo FROM times WHERE id = ?", (id_bot,))
+            bot_time = cursor.fetchone()
 
     cursor.execute(
         "SELECT COUNT(*) FROM jogadores WHERE id_time = ? AND titular = 1", (bot_time[0],))
@@ -251,16 +311,16 @@ def carregar_partida(page: ft.Page, id_usuario: int, id_adversario: int, ao_fina
 
     user_time, bot_time = preparar_dados_partida(id_usuario, id_adversario)
 
-    id_time_user, nome_user, fmt_user, c1, c2, c3, c4 = user_time
-    id_time_bot, nome_bot, fmt_bot, _, _, _, _ = bot_time
+    id_time_user, nome_user, fmt_user, sim_user, c1_u, c2_u, c3_u, c4_u, esc_u = user_time
+    id_time_bot, nome_bot, fmt_bot, sim_bot, c1_b, c2_b, c3_b, c4_b, esc_b = bot_time
 
     plantel_user = obter_nomes_plantel(id_time_user)
     plantel_bot = obter_nomes_plantel(id_time_bot)
 
-    escudo_user = construir_escudo(
-        c1, c2, c3, c4, formato=fmt_user, tamanho=0.9, is_bot=False)
-    escudo_bot = construir_escudo(
-        formato=fmt_bot, tamanho=0.9, is_bot=True, seed_id=id_time_bot)
+    escudo_user = obter_widget_escudo(
+        esc_u, c1_u, c2_u, c3_u, c4_u, formato=fmt_user, simbolo=sim_user, tamanho=0.9, seed_id=id_time_user)
+    escudo_bot = obter_widget_escudo(
+        esc_b, c1_b, c2_b, c3_b, c4_b, formato=fmt_bot, simbolo=sim_bot, tamanho=0.9, seed_id=id_time_bot)
 
     gols_user = ft.Text(
         "0", size=48, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
@@ -340,7 +400,6 @@ def carregar_partida(page: ft.Page, id_usuario: int, id_adversario: int, ao_fina
     btn_iniciar = ft.ElevatedButton(
         "Apito Inicial", icon=ft.Icons.PLAY_ARROW, height=45)
 
-    # Estado final do jogo mantido em referências mutáveis
     id_vencedor_final = [None]
     gols_user_final = [0]
     gols_bot_final = [0]
@@ -437,7 +496,6 @@ def carregar_partida(page: ft.Page, id_usuario: int, id_adversario: int, ao_fina
             remates_bot.value = str(stat_remates_fora)
             page.update()
 
-        # Decisão por Penáltis em caso de empate
         if casa['gols'] == fora['gols']:
             feed_lances.controls.append(
                 ft.Text("⚖ Partida empatada! Decisão nos PENÁLTIS...",

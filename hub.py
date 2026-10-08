@@ -1,88 +1,75 @@
-import database
 import inspect
 import sqlite3
 import flet as ft
 
-# Importação dos módulos do projeto
+import database
+import gerador
 import liga
 import copa
 import elenco
 import tatica
 import academia
 import loja
-import gerador
-
-
-def criar_escudo_compativel(formato, simbolo, c1, c2, c3, c4, tamanho=75):
-    """Filtra os parâmetros passados para gerador.criar_escudo_time conforme a sua assinatura."""
-    sig = inspect.signature(gerador.criar_escudo_time)
-    todos_args = {
-        'formato': formato,
-        'simbolo': simbolo,
-        'cor_principal': c1,
-        'cor_secundaria': c2,
-        'cor_borda': c3,
-        'cor_texto': c4,
-        'tamanho': tamanho
-    }
-    has_kwargs = any(
-        p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
-    args_validos = todos_args if has_kwargs else {
-        k: v for k, v in todos_args.items() if k in sig.parameters}
-
-    return gerador.criar_escudo_time(**args_validos)
+import partida
 
 
 def obter_dados_time(id_usuario):
-    """Procura as informações completas do clube, saldo, nível, EXP e diamantes no BD."""
+    """Procura as informações completas do clube no BD sem alterar dados."""
     database.inicializar_banco()
 
-    conn = sqlite3.connect('meu_manager.db')
+    conn = gerador.conectar_bd()
     cursor = conn.cursor()
 
-    # 1. Garante que as colunas 'formato' e 'simbolo' existem na tabela
-    for col, default in [('formato', "'Losango'"), ('simbolo', "'Bola'")]:
+    # Garante que as colunas necessárias existam na tabela times
+    for col in ['formato', 'simbolo', 'escudo']:
         try:
-            cursor.execute(
-                f"ALTER TABLE times ADD COLUMN {col} TEXT DEFAULT {default}")
+            cursor.execute(f"ALTER TABLE times ADD COLUMN {col} TEXT")
         except sqlite3.OperationalError:
             pass
 
-    # 2. Atualiza o clube na BD caso ainda esteja guardado como 'Clássico'
-    cursor.execute("""
-        UPDATE times 
-        SET formato = 'Losango',
-            simbolo = 'Bola',
-            cor_1 = 'Azul',
-            cor_2 = 'Preto',
-            cor_3 = 'Amarelo',
-            cor_4 = 'Branco'
-        WHERE id_usuario = ? AND (formato IS NULL OR formato = 'Clássico')
-    """, (id_usuario,))
-    conn.commit()
-
-    cursor.execute("""
-        SELECT t.id, t.nome, 
-               COALESCE(t.formato, 'Losango'),
+    try:
+            # Altere de COALESCE(t.formato, 'Redondo') para COALESCE(t.formato, 'Italiano')
+        cursor.execute("""
+            SELECT t.id, t.nome, 
+               COALESCE(t.formato, 'Italiano'),
                COALESCE(t.simbolo, 'Bola'),
                COALESCE(t.cor_1, 'Azul'), 
                COALESCE(t.cor_2, 'Preto'), 
                COALESCE(t.cor_3, 'Amarelo'), 
                COALESCE(t.cor_4, 'Branco'),
+               t.escudo,
                t.moedas_free, u.diamantes,
                COALESCE(u.nivel, 1), COALESCE(u.exp, 0)
-        FROM times t
-        INNER JOIN usuarios u ON u.id = t.id_usuario
-        WHERE t.id_usuario = ?
-    """, (id_usuario,))
-    time = cursor.fetchone()
+            FROM times t
+            INNER JOIN usuarios u ON u.id = t.id_usuario
+            WHERE t.id_usuario = ?
+        """, (id_usuario,))
+        time = cursor.fetchone()
+    except sqlite3.OperationalError:
+        cursor.execute("""
+            SELECT t.id, t.nome, 
+                   COALESCE(t.formato, 'Redondo'),
+                   COALESCE(t.simbolo, 'Bola'),
+                   COALESCE(t.cor_1, 'Azul'), 
+                   COALESCE(t.cor_2, 'Preto'), 
+                   COALESCE(t.cor_3, 'Amarelo'), 
+                   COALESCE(t.cor_4, 'Branco'),
+                   NULL as escudo,
+                   t.moedas_free, u.diamantes,
+                   COALESCE(u.nivel, 1), COALESCE(u.exp, 0)
+            FROM times t
+            INNER JOIN usuarios u ON u.id = t.id_usuario
+            WHERE t.id_usuario = ?
+        """, (id_usuario,))
+        time = cursor.fetchone()
+
     conn.close()
     return time
 
 
 def obter_jogadores(id_time):
     """Procura a lista de jogadores da equipa para exibir no Hub, incluindo energia."""
-    conn = sqlite3.connect('meu_manager.db')
+    conn = gerador.conectar_bd()
     cursor = conn.cursor()
     cursor.execute("""
         SELECT id, nome, posicao, titular, estrelas, velocidade, finalizacao, drible, passe, defesa, COALESCE(energia, 100)
@@ -122,7 +109,7 @@ def carregar_hub(page: ft.Page, id_usuario: int):
         return
 
     (id_time, nome_time, formato_escudo, simbolo_escudo, c1, c2, c3, c4,
-     moedas_free, diamantes, nivel, exp) = time
+     escudo_path, moedas_free, diamantes, nivel, exp) = time
 
     jogadores = obter_jogadores(id_time)
 
@@ -130,15 +117,21 @@ def carregar_hub(page: ft.Page, id_usuario: int):
     progresso_exp = min(
         1.0, exp / exp_necessaria) if exp_necessaria > 0 else 0.0
 
-    # Gera o escudo de forma compatível com os parâmetros disponíveis no gerador
-    escudo_clube = gerador.criar_escudo_time(
+    # DIAGNÓSTICO: Verifique a saída do terminal ao rodar o app
+    print(
+        f"🔍 [DEBUG HUB] Time: {nome_time} | Formato no Banco: '{formato_escudo}'")
+
+    # Renderiza o escudo
+    escudo_clube = partida.obter_widget_escudo(
+        escudo_path=escudo_path,
+        c1=c1,
+        c2=c2,
+        c3=c3,
+        c4=c4,
         formato=formato_escudo,
         simbolo=simbolo_escudo,
-        cor_principal=c1,
-        cor_secundaria=c2,
-        cor_borda=c3,
-        cor_texto=c4,
-        tamanho=75
+        tamanho=0.75,
+        seed_id=id_time
     )
 
     header = ft.Container(

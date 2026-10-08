@@ -3,45 +3,70 @@ import random
 
 
 def carregar_forca_do_time(id_time):
-    """Lê os 11 titulares da equipa e calcula a força dos setores."""
+    """Lê os 11 titulares da equipa e busca o nome e caminho exato do escudo no banco."""
     conn = sqlite3.connect('meu_manager.db')
     cursor = conn.cursor()
 
-    cursor.execute('SELECT nome FROM times WHERE id = ?', (id_time,))
-    nome_res = cursor.fetchone()
-    nome = nome_res[0] if nome_res else "Time Desconhecido"
+    # Busca o nome e o escudo cadastrados na tabela 'times' para o ID correspondente
+    try:
+        cursor.execute(
+            'SELECT nome, escudo FROM times WHERE id = ?', (id_time,))
+        nome_res = cursor.fetchone()
+
+        nome = nome_res[0] if (nome_res and nome_res[0]
+                               ) else "Time Desconhecido"
+        # Garante que utiliza o escudo correto do banco, sem redirecionar para escudos genéricos
+        escudo = nome_res[1] if (
+            nome_res and nome_res[1]) else "assets/escudos/default.png"
+    except sqlite3.OperationalError:
+        cursor.execute('SELECT nome FROM times WHERE id = ?', (id_time,))
+        nome_res = cursor.fetchone()
+        nome = nome_res[0] if (nome_res and nome_res[0]
+                               ) else "Time Desconhecido"
+        escudo = "assets/escudos/default.png"
 
     cursor.execute(
-        'SELECT velocidade, finalizacao, drible, passe, defesa FROM jogadores WHERE id_time = ? AND titular = 1', (id_time,))
+        'SELECT velocidade, finalizacao, drible, passe, defesa FROM jogadores WHERE id_time = ? AND titular = 1',
+        (id_time,)
+    )
     jogadores = cursor.fetchall()
     conn.close()
 
     if not jogadores:
-        return {"nome": nome, "ataque": 0, "meio": 0, "defesa": 0, "gols": 0}
+        return {
+            "nome": nome,
+            "escudo": escudo,
+            "ataque": 0,
+            "meio": 0,
+            "defesa": 0,
+            "gols": 0
+        }
 
     ataque = sum(j[0] + j[1] for j in jogadores)
     meio = sum(j[2] + j[3] for j in jogadores)
     defesa = sum(j[4] for j in jogadores)
 
-    return {"nome": nome, "ataque": ataque, "meio": meio, "defesa": defesa, "gols": 0}
+    return {
+        "nome": nome,
+        "escudo": escudo,
+        "ataque": ataque,
+        "meio": meio,
+        "defesa": defesa,
+        "gols": 0
+    }
 
 
 def calcular_posse_base(meio_casa, meio_fora):
-    """
-    Calcula uma estimativa de posse de bola realista baseada no meio-campo.
-    Aplica limites normais do futebol (28% a 72%).
-    """
+    """Calcula estimativa de posse de bola baseada no meio-campo."""
     total = max(1, meio_casa + meio_fora)
     proporcao = meio_casa / total
-
-    # Mapeia a proporção em torno de 50% com margem controlada
     base = 50 + (proporcao - 0.5) * 36
     posse_casa = int(max(28, min(72, base)))
     return posse_casa, 100 - posse_casa
 
 
 def simular_partida(id_time_casa, id_time_fora):
-    """Roda a partida rápida (backend/torneio) baseada na força das equipas."""
+    """Roda a partida rápida baseada na força das equipas."""
     casa = carregar_forca_do_time(id_time_casa)
     fora = carregar_forca_do_time(id_time_fora)
 

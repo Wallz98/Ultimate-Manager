@@ -2,8 +2,8 @@ import sqlite3
 import flet as ft
 
 import database
+import gerador
 import hub
-# Garante que o nome do ficheiro no teu projeto seja cria_time.py (ou ajusta o import se for criar_time.py)
 import cria_time
 
 
@@ -14,7 +14,7 @@ def obter_id_usuario_com_time():
     """
     database.inicializar_banco()
 
-    conn = sqlite3.connect('meu_manager.db')
+    conn = gerador.conectar_bd()
     cursor = conn.cursor()
     try:
         cursor.execute("""
@@ -46,7 +46,7 @@ def main(page: ft.Page):
         # Se já existir equipa, abre o Hub diretamente
         hub.carregar_hub(page, id_usuario)
     else:
-        # Se não existir equipa, delega o controlo para a função main do cria_time sem qualquer alteração nele
+        # Se não existir equipa, direciona para a criação de clube
         cria_time.main(page)
 
 

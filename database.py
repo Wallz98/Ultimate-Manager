@@ -3,7 +3,7 @@ import hashlib
 
 
 def inicializar_banco():
-    """Inicializa a estrutura do banco de dados do zero com suporte a formato, energia, diamantes e cores personalizadas."""
+    """Inicializa a estrutura do banco de dados do zero com suporte a formato, simbolo, escudo, energia, diamantes e cores personalizadas."""
     conn = sqlite3.connect('meu_manager.db')
     cursor = conn.cursor()
     cursor.execute('PRAGMA foreign_keys = ON;')
@@ -21,13 +21,15 @@ def inicializar_banco():
     )
     ''')
 
-    # 2. Tabela: Times (Com formato do escudo e cores independentes)
+    # 2. Tabela: Times (Com formato, simbolo, escudo e cores independentes)
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS times (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         id_usuario INTEGER, 
         nome TEXT NOT NULL,
         formato TEXT DEFAULT 'Clássico',
+        simbolo TEXT DEFAULT 'Estrela',
+        escudo TEXT DEFAULT NULL,
         is_bot BOOLEAN DEFAULT 0,
         cor_1 TEXT DEFAULT 'Azul',
         cor_2 TEXT DEFAULT 'Vermelho',
@@ -44,6 +46,8 @@ def inicializar_banco():
     # Migrações preventivas para bases existentes ou atualizações futuras
     colunas_novas_times = [
         ('formato', "TEXT DEFAULT 'Clássico'"),
+        ('simbolo', "TEXT DEFAULT 'Estrela'"),
+        ('escudo', "TEXT DEFAULT NULL"),
         ('cor_1', "TEXT DEFAULT 'Azul'"),
         ('cor_2', "TEXT DEFAULT 'Vermelho'"),
         ('cor_3', "TEXT DEFAULT 'Amarelo'"),

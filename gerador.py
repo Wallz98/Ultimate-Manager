@@ -1,15 +1,63 @@
 import math
+import os
 import random
 import sqlite3
+import sys
 import flet as ft
-import os
+
+
+def obter_caminho_bd():
+    """
+    Retorna o caminho do banco de dados compatível com Windows, Mac, Linux e Android.
+    """
+    nome_bd = 'meu_manager.db'
+
+    flet_storage = os.environ.get("FLET_APP_STORAGE_DATA")
+    android_private = os.environ.get("ANDROID_PRIVATE")
+
+    if flet_storage:
+        os.makedirs(flet_storage, exist_ok=True)
+        return os.path.join(flet_storage, nome_bd)
+    elif android_private:
+        os.makedirs(android_private, exist_ok=True)
+        return os.path.join(android_private, nome_bd)
+
+    if "ANDROID_ARGUMENT" in os.environ or hasattr(sys, "getandroidapilevel"):
+        pasta_home = os.path.expanduser("~")
+        return os.path.join(pasta_home, nome_bd)
+
+    return nome_bd
 
 
 def conectar_bd():
-    # Define um caminho seguro com permissão de escrita no Android e no Windows
-    pasta_dados = os.getenv("ANDROID_DATA", os.path.expanduser("~"))
-    caminho_bd = os.path.join(pasta_dados, "meu_manager.db")
-    return sqlite3.connect(caminho_bd)
+    return sqlite3.connect(obter_caminho_bd())
+
+
+def obter_coluna_id_times(cursor):
+    """Detecta dinamicamente a chave primária da tabela 'times'."""
+    cursor.execute("PRAGMA table_info(times)")
+    colunas = [row[1] for row in cursor.fetchall()]
+    if "id_time" in colunas:
+        return "id_time"
+    elif "id" in colunas:
+        return "id"
+    elif "id_clube" in colunas:
+        return "id_clube"
+    return "rowid"
+
+
+def obter_coluna_fk_jogadores(cursor):
+    """Detecta dinamicamente a chave estrangeira na tabela 'jogadores'."""
+    cursor.execute("PRAGMA table_info(jogadores)")
+    colunas = [row[1] for row in cursor.fetchall()]
+    if "id_time" in colunas:
+        return "id_time"
+    elif "time_id" in colunas:
+        return "time_id"
+    elif "id_clube" in colunas:
+        return "id_clube"
+    return "id_time"
+
 
 # --- LISTAS DE DADOS E NOMES ---
 NOMES_TIMES = [
@@ -46,43 +94,72 @@ FORMATOS_ESCUDO = ["Clássico", "Losango",
                    "Redondo", "Moderno", "Gótico", "Italiano"]
 
 MAPA_CORES = {
-    "Azul": ft.colors.BLUE_700,
-    "Vermelho": ft.colors.RED_700,
-    "Preto": ft.colors.BLACK87,
-    "Branco": ft.colors.WHITE,
-    "Amarelo": ft.colors.AMBER,
-    "Verde": ft.colors.GREEN_700,
-    "Laranja": ft.colors.ORANGE_700,
-    "Roxo": ft.colors.PURPLE_700
+    "Azul": ft.Colors.BLUE_700,
+    "Vermelho": ft.Colors.RED_700,
+    "Preto": ft.Colors.BLACK87,
+    "Branco": ft.Colors.WHITE,
+    "Amarelo": ft.Colors.AMBER,
+    "Verde": ft.Colors.GREEN_700,
+    "Laranja": ft.Colors.ORANGE_700,
+    "Roxo": ft.Colors.PURPLE_700
 }
 CORES = MAPA_CORES
 
 ICONES = {
-    "Estrela": ft.icons.STAR_ROUNDED,
-    "Escudo": ft.icons.SHIELD,
-    "Raio": ft.icons.FLASH_ON,
-    "Fogo": ft.icons.LOCAL_FIRE_DEPARTMENT,
-    "Bola": ft.icons.SPORTS_SOCCER,
-    "Medalha": ft.icons.MILITARY_TECH,
-    "Coroa": ft.icons.WORKSPACE_PREMIUM,
-    "Castelo": ft.icons.FORT
+    "Estrela": ft.Icons.STAR_ROUNDED,
+    "Escudo": ft.Icons.SHIELD,
+    "Raio": ft.Icons.FLASH_ON,
+    "Fogo": ft.Icons.LOCAL_FIRE_DEPARTMENT,
+    "Bola": ft.Icons.SPORTS_SOCCER,
+    "Medalha": ft.Icons.MILITARY_TECH,
+    "Coroa": ft.Icons.WORKSPACE_PREMIUM,
+    "Castelo": ft.Icons.FORT
 }
 LISTA_SIMBOLOS = list(ICONES.keys())
 
 
-def garantir_colunas(cursor):
-    """Garante a existência das colunas necessárias na tabela 'times'."""
-    for col, default in [('formato', "'Losango'"), ('simbolo', "'Bola'")]:
+def garantir_colunas(cursor, conn=None):
+    """Garante as colunas e atualiza permanentemente no BD os times que ficaram com 'Estrela'."""
+    colunas = [
+        ('formato', "'Clássico'"),
+        ('simbolo', "'Estrela'"),
+        ('escudo', "NULL"),
+        ('cor_1', "'Azul'"),
+        ('cor_2', "'Vermelho'"),
+        ('cor_3', "'Amarelo'"),
+        ('cor_4', "'Branco'")
+    ]
+    for col, default in colunas:
         try:
             cursor.execute(
                 f"ALTER TABLE times ADD COLUMN {col} TEXT DEFAULT {default}")
         except sqlite3.OperationalError:
             pass
 
+    col_id = obter_coluna_id_times(cursor)
+
+    # Força a re-randomização e SALVA no BD todos os times que estão com 'Estrela' ou sem símbolo
+    try:
+        cursor.execute(
+            f"SELECT {col_id} FROM times WHERE simbolo IS NULL OR simbolo = 'Estrela' OR simbolo = ''")
+        bots = cursor.fetchall()
+        for (id_t,) in bots:
+            s_rand = random.choice(LISTA_SIMBOLOS)
+            f_rand = random.choice(FORMATOS_ESCUDO)
+            cursor.execute(
+                f"UPDATE times SET simbolo = ?, formato = ? WHERE {col_id} = ?", (s_rand, f_rand, id_t))
+
+        if conn:
+            conn.commit()
+        elif hasattr(cursor, 'connection') and cursor.connection:
+            cursor.connection.commit()
+    except Exception:
+        pass
+
 
 def obter_cor_flet(cor_str):
     if not cor_str:
-        return ft.colors.BLUE_700
+        return ft.Colors.BLUE_700
     if isinstance(cor_str, str) and cor_str in MAPA_CORES:
         return MAPA_CORES[cor_str]
     return cor_str
@@ -149,7 +226,7 @@ def obter_formatos_escala(escala: float):
 
 def criar_escudo_time(
     formato="Losango",
-    simbolo="Bola",
+    simbolo=None,
     cor_principal="Azul",
     cor_secundaria="Vermelho",
     cor_borda="Amarelo",
@@ -157,19 +234,26 @@ def criar_escudo_time(
     tamanho=140,
     **kwargs
 ):
-    formato = kwargs.get('escudo_formato', formato)
-    simbolo = kwargs.get('icone', kwargs.get('simbolo_escudo', simbolo))
+    formato = kwargs.get('formato', kwargs.get('escudo_formato', formato))
+    simbolo = kwargs.get('simbolo', kwargs.get('icone', kwargs.get(
+        'simbolo_escudo', kwargs.get('simbolo_time', simbolo))))
+
     cor_principal = kwargs.get('cor_1', kwargs.get('c1', cor_principal))
     cor_secundaria = kwargs.get('cor_2', kwargs.get('c2', cor_secundaria))
     cor_borda = kwargs.get('cor_3', kwargs.get('c3', cor_borda))
     cor_texto = kwargs.get('cor_4', kwargs.get('c4', cor_texto))
+
+    # Caso venha sem símbolo ou seja o símbolo genérico 'Estrela', sorteia um ícone variado
+    if not simbolo or simbolo == "Estrela" or simbolo not in ICONES:
+        simbolo = random.choice(
+            [s for s in LISTA_SIMBOLOS if s != "Estrela"] or LISTA_SIMBOLOS)
 
     bg_miolo = obter_cor_flet(cor_principal)
     bg_listras = obter_cor_flet(cor_secundaria)
     bg_borda = obter_cor_flet(cor_borda)
     color_icone = obter_cor_flet(cor_texto)
 
-    icone_nome = ICONES.get(simbolo, ft.icons.SPORTS_SOCCER)
+    icone_nome = ICONES.get(simbolo, ft.Icons.SPORTS_SOCCER)
 
     escala = tamanho / 140.0
     formatos = obter_formatos_escala(escala)
@@ -223,7 +307,7 @@ def criar_escudo_time(
         alignment=ft.alignment.center,
         rotate=ft.Rotate(angle=angulo),
         shadow=ft.BoxShadow(
-            blur_radius=10 * escala, color=ft.colors.BLACK26, offset=ft.Offset(0, 5 * escala)
+            blur_radius=10 * escala, color=ft.Colors.BLACK26, offset=ft.Offset(0, 5 * escala)
         )
     )
 
@@ -257,7 +341,8 @@ def calcular_estrelas(media):
         return 5
 
 
-def gerar_elenco(id_time, nivel_base=1):
+def gerar_elenco(id_time, nivel_base=1, **kwargs):
+    nivel = kwargs.get('nivel_time', nivel_base)
     elenco = []
     distribuicao = ['GOL', 'GOL', 'ZAG', 'ZAG', 'ZAG', 'ZAG', 'ZAG', 'ZAG',
                     'MEI', 'MEI', 'MEI', 'MEI', 'MEI', 'MEI', 'ATA', 'ATA', 'ATA', 'ATA']
@@ -266,18 +351,18 @@ def gerar_elenco(id_time, nivel_base=1):
         nome = f"{random.choice(NOMES_JOGADORES)} {random.choice(SOBRENOMES_JOGADORES)}"
 
         if posicao == 'GOL':
-            vel = random.randint(nivel_base * 10, nivel_base * 20)
-            fin = random.randint(nivel_base * 15, nivel_base * 30)
-            dri = random.randint(nivel_base * 10, nivel_base * 25)
-            pas = random.randint(nivel_base * 10, nivel_base * 20)
-            defesa = random.randint(nivel_base * 15, nivel_base * 35)
+            vel = random.randint(nivel * 10, nivel * 20)
+            fin = random.randint(nivel * 15, nivel * 30)
+            dri = random.randint(nivel * 10, nivel * 25)
+            pas = random.randint(nivel * 10, nivel * 20)
+            defesa = random.randint(nivel * 15, nivel * 35)
         else:
-            vel = random.randint(nivel_base * 10, nivel_base * 25)
-            fin = random.randint(nivel_base * 10, nivel_base * 25)
-            dri = random.randint(nivel_base * 10, nivel_base * 25)
-            pas = random.randint(nivel_base * 10, nivel_base * 25)
+            vel = random.randint(nivel * 10, nivel * 25)
+            fin = random.randint(nivel * 10, nivel * 25)
+            dri = random.randint(nivel * 10, nivel * 25)
+            pas = random.randint(nivel * 10, nivel * 25)
             defesa = random.randint(
-                nivel_base * 10, nivel_base * 35) if posicao == 'ZAG' else random.randint(nivel_base * 5, nivel_base * 15)
+                nivel * 10, nivel * 35) if posicao == 'ZAG' else random.randint(nivel * 5, nivel * 15)
 
             if posicao == 'ATA':
                 fin += 15
@@ -304,11 +389,11 @@ def gerar_elenco(id_time, nivel_base=1):
 
 
 def gerar_time_torneio(nome_time, estrelas_bot=1):
-    """Gera uma equipa BOT para torneios com formato, símbolo e cores totalmente aleatórios."""
-    conn = sqlite3.connect('meu_manager.db')
+    conn = conectar_bd()
     cursor = conn.cursor()
-    garantir_colunas(cursor)
+    garantir_colunas(cursor, conn)
 
+    col_fk = obter_coluna_fk_jogadores(cursor)
     c1, c2, c3, c4 = sortear_cores()
     formato_bot = random.choice(FORMATOS_ESCUDO)
     simbolo_bot = random.choice(LISTA_SIMBOLOS)
@@ -333,8 +418,8 @@ def gerar_time_torneio(nome_time, estrelas_bot=1):
         pas = min(random.randint(min_stat, max_stat), 99)
         dfe = min(random.randint(min_stat, max_stat), 99)
 
-        cursor.execute("""
-            INSERT INTO jogadores (id_time, nome, posicao, titular, estrelas, velocidade, finalizacao, drible, passe, defesa)
+        cursor.execute(f"""
+            INSERT INTO jogadores ({col_fk}, nome, posicao, titular, estrelas, velocidade, finalizacao, drible, passe, defesa)
             VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
         """, (id_time, nome_j, pos, estrelas_bot, vel, fin, dri, pas, dfe))
 
@@ -343,23 +428,26 @@ def gerar_time_torneio(nome_time, estrelas_bot=1):
     return id_time
 
 
-def criar_time_usuario(id_usuario, nome_time, cor_1="Azul", cor_2="Vermelho", cor_3="Amarelo", cor_4="Branco", formato="Losango", simbolo="Bola", **kwargs):
-    conn = sqlite3.connect('meu_manager.db')
+def criar_time_usuario(id_usuario, nome_time, cor_1="Azul", cor_2="Vermelho", cor_3="Amarelo", cor_4="Branco", formato="Clássico", simbolo="Bola", **kwargs):
+    conn = conectar_bd()
     cursor = conn.cursor()
-    garantir_colunas(cursor)
+    garantir_colunas(cursor, conn)
 
-    cursor.execute('''
-        INSERT INTO times (id_usuario, nome, formato, simbolo, is_bot, cor_1, cor_2, cor_3, cor_4, moedas_free, moedas_missao) 
+    col_fk = obter_coluna_fk_jogadores(cursor)
+
+    cursor.execute("""
+        INSERT INTO times (id_usuario, nome, formato, simbolo, is_bot, cor_1, cor_2, cor_3, cor_4, moedas_free, moedas_missao)
         VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, 1000, 50)
-    ''', (id_usuario, nome_time, formato, simbolo, cor_1, cor_2, cor_3, cor_4))
+    """, (id_usuario, nome_time, formato, simbolo, cor_1, cor_2, cor_3, cor_4))
 
     id_time = cursor.lastrowid
+
     jogadores = gerar_elenco(id_time, nivel_base=1)
 
-    cursor.executemany('''
-        INSERT INTO jogadores (id_time, nome, posicao, titular, estrelas, velocidade, finalizacao, drible, passe, defesa)
+    cursor.executemany(f"""
+        INSERT INTO jogadores ({col_fk}, nome, posicao, titular, estrelas, velocidade, finalizacao, drible, passe, defesa)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', jogadores)
+    """, jogadores)
 
     conn.commit()
     conn.close()
@@ -367,11 +455,11 @@ def criar_time_usuario(id_usuario, nome_time, cor_1="Azul", cor_2="Vermelho", co
 
 
 def criar_time_bot(nome_time, nivel_estrelas=1):
-    """Cria uma equipa BOT completa com formato, símbolo e cores aleatórias."""
-    conn = sqlite3.connect('meu_manager.db')
+    conn = conectar_bd()
     cursor = conn.cursor()
-    garantir_colunas(cursor)
+    garantir_colunas(cursor, conn)
 
+    col_fk = obter_coluna_fk_jogadores(cursor)
     c1, c2, c3, c4 = sortear_cores()
     formato_bot = random.choice(FORMATOS_ESCUDO)
     simbolo_bot = random.choice(LISTA_SIMBOLOS)
@@ -384,8 +472,8 @@ def criar_time_bot(nome_time, nivel_estrelas=1):
     id_time = cursor.lastrowid
     jogadores = gerar_elenco(id_time, nivel_base=nivel_estrelas)
 
-    cursor.executemany('''
-        INSERT INTO jogadores (id_time, nome, posicao, titular, estrelas, velocidade, finalizacao, drible, passe, defesa)
+    cursor.executemany(f'''
+        INSERT INTO jogadores ({col_fk}, nome, posicao, titular, estrelas, velocidade, finalizacao, drible, passe, defesa)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', jogadores)
 

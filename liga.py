@@ -5,33 +5,54 @@ import gerador
 import partida
 
 
-def obter_escudo(id_time, tamanho=30):
-    """Busca as configurações do escudo no banco de dados e gera o escudo escalado."""
+def obter_escudo(id_time, tamanho=28):
+    """
+    Busca as configurações do escudo (incluindo o símbolo) e a imagem no banco de dados,
+    gerando o escudo em tamanho compacto (~28px) ideal para linhas de tabela.
+    """
     conn = sqlite3.connect('meu_manager.db')
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT formato, simbolo, cor_1, cor_2, cor_3, cor_4 
-        FROM times WHERE id = ?
-    """, (id_time,))
-    row = cursor.fetchone()
+
+    try:
+        cursor.execute("""
+            SELECT formato, simbolo, cor_1, cor_2, cor_3, cor_4, escudo 
+            FROM times WHERE id = ?
+        """, (id_time,))
+        row = cursor.fetchone()
+    except sqlite3.OperationalError:
+        cursor.execute("""
+            SELECT formato, simbolo, cor_1, cor_2, cor_3, cor_4, NULL as escudo 
+            FROM times WHERE id = ?
+        """, (id_time,))
+        row = cursor.fetchone()
+
     conn.close()
 
-    if row:
-        fmt, sim, c1, c2, c3, c4 = row
-        # Se sim for None ou vazio, sorteia um da lista de ícones disponíveis
-        simbolo_final = sim if sim else random.choice(
-            list(gerador.ICONES.keys()))
-        return gerador.criar_escudo_time(
-            formato=fmt or "Losango",
-            simbolo=simbolo_final,
-            cor_principal=c1 or "Azul",
-            cor_secundaria=c2 or "Vermelho",
-            cor_borda=c3 or "Amarelo",
-            cor_texto=c4 or "Branco",
-            tamanho=tamanho
-        )
-    return gerador.criar_escudo_time(tamanho=tamanho)
+    # Ajusta o fator de escala para que o escudo fique compacto na tabela (~28px)
+    escala = tamanho / 100.0
 
+    if row:
+        fmt, sim, c1, c2, c3, c4, esc_path = row
+        return partida.obter_widget_escudo(
+            escudo_path=esc_path,
+            c1=c1,
+            c2=c2,
+            c3=c3,
+            c4=c4,
+            formato=fmt or "Clássico",
+            simbolo=sim or "Bola",
+            tamanho=escala,
+            seed_id=id_time
+        )
+
+    return partida.obter_widget_escudo(
+        escudo_path=None,
+        c1=None, c2=None, c3=None, c4=None,
+        formato="Clássico",
+        simbolo="Bola",
+        tamanho=escala,
+        seed_id=id_time
+    )
 
 def premiar_subida_divisao(id_usuario, valor_premio=1500):
     """Premia o utilizador no banco de dados por subir de divisão."""
@@ -202,8 +223,14 @@ def carregar_liga(page: ft.Page, id_usuario: int, ao_voltar_hub):
     rows = []
     for idx, t in enumerate(times_ordenados):
         pos = idx + 1
-        cor_fundo = "#1E3A8A" if t["is_user"] else (
-            "#065F46" if pos <= 2 else None)
+
+        # Destaque de cor suave e contrastante para linhas
+        if t["is_user"]:
+            cor_fundo = "#1E40AF"  # Azul destacado para o utilizador
+        elif pos <= 2:
+            cor_fundo = "#064E3B"  # Verde escuro para zona de subida
+        else:
+            cor_fundo = "#0F172A" if idx % 2 == 0 else "#1E293B"  # Zebra sutil
 
         escudo_widget = obter_escudo(t["id"], tamanho=28)
 
@@ -213,57 +240,78 @@ def carregar_liga(page: ft.Page, id_usuario: int, ao_voltar_hub):
                 ft.Text(
                     t["nome"],
                     weight=ft.FontWeight.BOLD if t["is_user"] else ft.FontWeight.NORMAL,
-                    color=ft.colors.AMBER_400 if t["is_user"] else ft.colors.WHITE
+                    color=ft.Colors.AMBER_400 if t["is_user"] else ft.Colors.WHITE,
+                    size=13
                 )
-            ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+            ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER)
         )
 
         rows.append(
             ft.DataRow(
                 color=cor_fundo,
                 cells=[
-                    ft.DataCell(ft.Text(
-                        f"{pos}º", weight=ft.FontWeight.BOLD if pos <= 2 else ft.FontWeight.NORMAL)),
+                    ft.DataCell(ft.Text(f"{pos}º", weight=ft.FontWeight.BOLD if pos <=
+                                2 else ft.FontWeight.NORMAL, color=ft.Colors.WHITE)),
                     celula_equipa,
                     ft.DataCell(
-                        ft.Text(str(t["pts"]), weight=ft.FontWeight.BOLD)),
-                    ft.DataCell(ft.Text(str(t["j"]))),
-                    ft.DataCell(ft.Text(str(t["v"]))),
-                    ft.DataCell(ft.Text(str(t["e"]))),
-                    ft.DataCell(ft.Text(str(t["d"]))),
-                    ft.DataCell(ft.Text(str(t["sg"]))),
+                        ft.Text(str(t["pts"]), weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_300)),
+                    ft.DataCell(
+                        ft.Text(str(t["j"]), color=ft.Colors.GREY_300)),
+                    ft.DataCell(
+                        ft.Text(str(t["v"]), color=ft.Colors.GREY_300)),
+                    ft.DataCell(
+                        ft.Text(str(t["e"]), color=ft.Colors.GREY_300)),
+                    ft.DataCell(
+                        ft.Text(str(t["d"]), color=ft.Colors.GREY_300)),
+                    ft.DataCell(
+                        ft.Text(str(t["sg"]), color=ft.Colors.GREY_300)),
                 ]
             )
         )
 
+    estilo_cabecalho = ft.TextStyle(
+        weight=ft.FontWeight.BOLD, color=ft.Colors.CYAN_300, size=12)
+
     tabela = ft.DataTable(
+        heading_row_color="#0F172A",
         columns=[
-            ft.DataColumn(ft.Text("Pos")),
-            ft.DataColumn(ft.Text("Equipa")),
-            ft.DataColumn(ft.Text("Pts")),
-            ft.DataColumn(ft.Text("J")),
-            ft.DataColumn(ft.Text("V")),
-            ft.DataColumn(ft.Text("E")),
-            ft.DataColumn(ft.Text("D")),
-            ft.DataColumn(ft.Text("SG")),
+            ft.DataColumn(ft.Text("Pos", style=estilo_cabecalho)),
+            ft.DataColumn(ft.Text("Equipa", style=estilo_cabecalho)),
+            ft.DataColumn(ft.Text("Pts", style=estilo_cabecalho)),
+            ft.DataColumn(ft.Text("J", style=estilo_cabecalho)),
+            ft.DataColumn(ft.Text("V", style=estilo_cabecalho)),
+            ft.DataColumn(ft.Text("E", style=estilo_cabecalho)),
+            ft.DataColumn(ft.Text("D", style=estilo_cabecalho)),
+            ft.DataColumn(ft.Text("SG", style=estilo_cabecalho)),
         ],
-        rows=rows
+        rows=rows,
+        data_row_max_height=42,  # Mantém as linhas da tabela com altura elegante
+    )
+
+    # Cartão de fundo para dar destaque e excelente contraste à tabela
+    cartao_tabela = ft.Container(
+        content=tabela,
+        bgcolor="#1E293B",
+        border_radius=14,
+        padding=10,
+        border=ft.border.all(1, "#334155"),
+        shadow=ft.BoxShadow(blur_radius=12, color=ft.Colors.BLACK54)
     )
 
     titulo_texto = f"📊 LIGA DIVISÃO {dados['divisao']} - RODADA {min(rodada, max_rodadas)}/{max_rodadas}"
     header_title = ft.Text(titulo_texto, size=22,
-                           weight=ft.FontWeight.BOLD, color=ft.colors.CYAN_400)
+                           weight=ft.FontWeight.BOLD, color=ft.Colors.CYAN_400)
 
     if rodada <= max_rodadas:
         painel_acao = ft.Column([
             ft.Text("🟢 ZONA DE SUBIDA: 1º e 2º Lugares",
-                    size=12, color=ft.colors.GREEN_400),
+                    size=12, color=ft.Colors.GREEN_400),
             ft.Container(height=5),
             ft.ElevatedButton(
                 f"JOGAR RODADA {rodada}",
-                icon=ft.icons.PLAY_ARROW,
-                bgcolor=ft.colors.GREEN_600,
-                color=ft.colors.WHITE,
+                icon=ft.Icons.PLAY_ARROW,
+                bgcolor=ft.Colors.GREEN_600,
+                color=ft.Colors.WHITE,
                 height=45,
                 on_click=lambda e: jogar_rodada_atual()
             )
@@ -278,13 +326,13 @@ def carregar_liga(page: ft.Page, id_usuario: int, ao_voltar_hub):
 
             msg_resultado = ft.Text(
                 f"🎉 PARABÉNS! Ficaste em {posicao_jogador}º Lugar e SUBISTE À 1ª DIVISÃO!\nBónus: +2000 Moedas!",
-                size=18, weight=ft.FontWeight.BOLD, color=ft.colors.GREEN_400, text_align=ft.TextAlign.CENTER
+                size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN_400, text_align=ft.TextAlign.CENTER
             )
             proxima_divisao = 1
         else:
             msg_resultado = ft.Text(
                 f"⚠️ Terminaste em {posicao_jogador}º Lugar.\nNão alcançaste os 2 primeiros lugares e permaneces na 2ª Divisão.",
-                size=16, weight=ft.FontWeight.BOLD, color=ft.colors.AMBER_400, text_align=ft.TextAlign.CENTER
+                size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400, text_align=ft.TextAlign.CENTER
             )
             proxima_divisao = 2
 
@@ -293,9 +341,9 @@ def carregar_liga(page: ft.Page, id_usuario: int, ao_voltar_hub):
             ft.Container(height=10),
             ft.ElevatedButton(
                 "🔄 REINICIAR LIGA (NOVA TEMPORADA)",
-                icon=ft.icons.REFRESH,
-                bgcolor=ft.colors.CYAN_600,
-                color=ft.colors.WHITE,
+                icon=ft.Icons.REFRESH,
+                bgcolor=ft.Colors.CYAN_600,
+                color=ft.Colors.WHITE,
                 height=45,
                 on_click=lambda e: reiniciar_liga_temporada(
                     nova_divisao=proxima_divisao)
@@ -304,14 +352,14 @@ def carregar_liga(page: ft.Page, id_usuario: int, ao_voltar_hub):
 
     btn_voltar = ft.OutlinedButton(
         "Voltar ao Hub",
-        icon=ft.icons.ARROW_BACK,
+        icon=ft.Icons.ARROW_BACK,
         on_click=lambda e: ao_voltar_hub(id_usuario)
     )
 
     page.add(
         header_title,
         ft.Container(height=10),
-        tabela,
+        cartao_tabela,
         ft.Container(height=15),
         painel_acao,
         ft.Container(height=10),
