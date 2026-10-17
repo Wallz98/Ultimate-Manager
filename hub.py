@@ -1,4 +1,5 @@
-import inspect
+import base64
+import os
 import sqlite3
 import flet as ft
 
@@ -13,14 +14,93 @@ import loja
 import partida
 
 
-def obter_dados_time(id_usuario):
-    """Procura as informações completas do clube no BD sem alterar dados."""
-    database.inicializar_banco()
+def buscar_arquivo_imagem(nome_ou_caminho):
+    """
+    Busca o ficheiro da foto no disco de forma flexível.
+    Verifica Player_img (singular) e Players_img (plural).
+    """
+    if not nome_ou_caminho:
+        nome_ou_caminho = "Cartoonify (1).png"
 
+    nome_base = os.path.basename(str(nome_ou_caminho)).strip().lower()
+
+    bases = [
+        os.getcwd(),
+        os.path.dirname(os.path.abspath(__file__))
+    ]
+
+    pastas_busca = []
+    for base in bases:
+        pastas_busca.extend([
+            os.path.join(base, "assets", "Player_img"),
+            os.path.join(base, "assets", "Players_img"),
+            os.path.join(base, "assets", "player_img"),
+            os.path.join(base, "assets", "players_img"),
+            os.path.join(base, "assets"),
+            os.path.join(base, "Player_img"),
+            os.path.join(base, "Players_img"),
+            base
+        ])
+
+    # 1. Procura pelo nome exato do ficheiro em qualquer das pastas
+    for pasta in pastas_busca:
+        if os.path.exists(pasta) and os.path.isdir(pasta):
+            try:
+                for arq in os.listdir(pasta):
+                    if arq.lower() == nome_base:
+                        return os.path.join(pasta, arq)
+            except Exception:
+                pass
+
+    # 2. Fallback: Se o nome específico não existir, carrega qualquer imagem disponível na pasta
+    for pasta in pastas_busca:
+        if os.path.exists(pasta) and os.path.isdir(pasta):
+            try:
+                for arq in os.listdir(pasta):
+                    if arq.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                        return os.path.join(pasta, arq)
+            except Exception:
+                pass
+
+    return None
+
+
+def criar_avatar_jogador(caminho_foto, tamanho=52, cor_borda=ft.Colors.CYAN_400):
+    caminho_encontrado = buscar_arquivo_imagem(caminho_foto)
+
+    if caminho_encontrado:
+        try:
+            with open(caminho_encontrado, "rb") as f:
+                b64_str = base64.b64encode(f.read()).decode('utf-8')
+            img_widget = ft.Image(
+                src_base64=b64_str,
+                width=tamanho,
+                height=tamanho,
+                fit=ft.ImageFit.COVER
+            )
+        except Exception:
+            img_widget = ft.Icon(
+                ft.Icons.PERSON, size=tamanho * 0.7, color=ft.Colors.GREY_400)
+    else:
+        img_widget = ft.Icon(ft.Icons.PERSON, size=tamanho *
+                             0.7, color=ft.Colors.GREY_400)
+
+    return ft.Container(
+        content=img_widget,
+        width=tamanho,
+        height=tamanho,
+        border_radius=tamanho / 2,
+        clip_behavior=ft.ClipBehavior.HARD_EDGE,
+        border=ft.border.all(1.5, cor_borda),
+        alignment=ft.alignment.center
+    )
+
+
+def obter_dados_time(id_usuario):
+    database.inicializar_banco()
     conn = gerador.conectar_bd()
     cursor = conn.cursor()
 
-    # Garante que as colunas necessárias existam na tabela times
     for col in ['formato', 'simbolo', 'escudo']:
         try:
             cursor.execute(f"ALTER TABLE times ADD COLUMN {col} TEXT")
@@ -28,7 +108,6 @@ def obter_dados_time(id_usuario):
             pass
 
     try:
-            # Altere de COALESCE(t.formato, 'Redondo') para COALESCE(t.formato, 'Italiano')
         cursor.execute("""
             SELECT t.id, t.nome, 
                COALESCE(t.formato, 'Italiano'),
@@ -68,11 +147,11 @@ def obter_dados_time(id_usuario):
 
 
 def obter_jogadores(id_time):
-    """Procura a lista de jogadores da equipa para exibir no Hub, incluindo energia."""
     conn = gerador.conectar_bd()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT id, nome, posicao, titular, estrelas, velocidade, finalizacao, drible, passe, defesa, COALESCE(energia, 100)
+        SELECT id, nome, posicao, titular, estrelas, 
+               COALESCE(foto, 'Cartoonify (1).png')
         FROM jogadores WHERE id_time = ? ORDER BY titular DESC, posicao ASC
     """, (id_time,))
     jogadores = cursor.fetchall()
@@ -81,13 +160,12 @@ def obter_jogadores(id_time):
 
 
 def obter_cor_card_por_estrelas(estrelas):
-    """Define as cores de fundo e borda baseadas na quantidade de estrelas."""
     if estrelas <= 2:
-        return {"border": ft.Colors.BROWN_400, "bg": "#2A1810", "categoria": "BRONZE"}
+        return {"border": ft.Colors.BROWN_400, "bg": "#2A1810"}
     elif estrelas <= 4:
-        return {"border": ft.Colors.GREY_400, "bg": "#1E293B", "categoria": "PRATA"}
+        return {"border": ft.Colors.GREY_400, "bg": "#1E293B"}
     else:
-        return {"border": ft.Colors.AMBER_400, "bg": "#3B2607", "categoria": "OURO"}
+        return {"border": ft.Colors.AMBER_400, "bg": "#3B2607"}
 
 
 def carregar_hub(page: ft.Page, id_usuario: int):
@@ -117,17 +195,9 @@ def carregar_hub(page: ft.Page, id_usuario: int):
     progresso_exp = min(
         1.0, exp / exp_necessaria) if exp_necessaria > 0 else 0.0
 
-    # DIAGNÓSTICO: Verifique a saída do terminal ao rodar o app
-    print(
-        f"🔍 [DEBUG HUB] Time: {nome_time} | Formato no Banco: '{formato_escudo}'")
-
-    # Renderiza o escudo
     escudo_clube = partida.obter_widget_escudo(
         escudo_path=escudo_path,
-        c1=c1,
-        c2=c2,
-        c3=c3,
-        c4=c4,
+        c1=c1, c2=c2, c3=c3, c4=c4,
         formato=formato_escudo,
         simbolo=simbolo_escudo,
         tamanho=0.75,
@@ -269,16 +339,10 @@ def carregar_hub(page: ft.Page, id_usuario: int):
     )
 
     def criar_card_mini_jogador(j):
-        _, nome, pos, titular, estrelas, vel, fin, dri, pas, def_stat, energia = j
+        id_j, nome, pos, titular, estrelas, foto_bd = j
         estilo = obter_cor_card_por_estrelas(estrelas)
-        status_txt = "TITULAR" if titular == 1 else "SUPLENTE"
-        status_cor = ft.Colors.GREEN_400 if titular == 1 else ft.Colors.GREY_500
-
-        cor_energia = (
-            ft.Colors.GREEN_400 if energia >= 70
-            else ft.Colors.AMBER_400 if energia >= 40
-            else ft.Colors.RED_400
-        )
+        avatar = criar_avatar_jogador(
+            foto_bd, tamanho=52, cor_borda=ft.Colors.CYAN_400)
 
         return ft.Container(
             content=ft.Column([
@@ -288,27 +352,21 @@ def carregar_hub(page: ft.Page, id_usuario: int):
                             pos, size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
                         bgcolor="#0F172A", padding=ft.padding.symmetric(horizontal=6, vertical=2), border_radius=4
                     ),
-                    ft.Row([
-                        ft.Text(f"⚡{energia}%", size=10,
-                                weight=ft.FontWeight.BOLD, color=cor_energia),
-                        ft.Text(status_txt, size=10,
-                                weight=ft.FontWeight.BOLD, color=status_cor)
-                    ], spacing=5)
+                    ft.Text("⭐ " * estrelas, size=8),
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
 
-                ft.Text(nome, size=13, weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.WHITE, overflow=ft.TextOverflow.ELLIPSIS),
-                ft.Text("⭐ " * estrelas, size=11),
-                ft.Divider(color=ft.Colors.GREY_800, height=8),
+                avatar,
 
-                ft.Row([
-                    ft.Text(f"VEL {vel}", size=10, color=ft.Colors.GREY_300),
-                    ft.Text(f"FIN {fin}", size=10, color=ft.Colors.GREY_300),
-                    ft.Text(f"DEF {def_stat}", size=10,
-                            color=ft.Colors.GREY_300),
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
-            ], spacing=4, alignment=ft.MainAxisAlignment.CENTER),
-            width=175, height=135, bgcolor=estilo["bg"], border_radius=10, padding=10,
+                ft.Text(
+                    nome.split()[0],
+                    size=12,
+                    weight=ft.FontWeight.BOLD,
+                    color=ft.Colors.WHITE,
+                    overflow=ft.TextOverflow.ELLIPSIS,
+                    max_lines=1
+                ),
+            ], spacing=6, horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.CENTER),
+            width=110, height=125, bgcolor=estilo["bg"], border_radius=12, padding=8,
             border=ft.border.all(1.5, estilo["border"])
         )
 

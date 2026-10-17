@@ -3,7 +3,7 @@ import hashlib
 
 
 def inicializar_banco():
-    """Inicializa a estrutura do banco de dados do zero com suporte a formato, simbolo, escudo, energia, diamantes e cores personalizadas."""
+    """Inicializa a estrutura do banco de dados com suporte a formato, simbolo, escudo, energia, foto, diamantes e cores personalizadas."""
     conn = sqlite3.connect('meu_manager.db')
     cursor = conn.cursor()
     cursor.execute('PRAGMA foreign_keys = ON;')
@@ -43,7 +43,7 @@ def inicializar_banco():
     )
     ''')
 
-    # Migrações preventivas para bases existentes ou atualizações futuras
+    # Migrações preventivas para a tabela 'times'
     colunas_novas_times = [
         ('formato', "TEXT DEFAULT 'Clássico'"),
         ('simbolo', "TEXT DEFAULT 'Estrela'"),
@@ -59,7 +59,7 @@ def inicializar_banco():
         except sqlite3.OperationalError:
             pass
 
-    # 3. Tabela: Jogadores (com coluna 'energia')
+    # 3. Tabela: Jogadores (com suporte a 'energia' e 'foto')
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS jogadores (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,15 +74,21 @@ def inicializar_banco():
         passe INTEGER DEFAULT 10,
         defesa INTEGER DEFAULT 10,
         energia INTEGER DEFAULT 100,
+        foto TEXT DEFAULT NULL,
         FOREIGN KEY (id_time) REFERENCES times (id) ON DELETE CASCADE
     )
     ''')
 
-    try:
-        cursor.execute(
-            "ALTER TABLE jogadores ADD COLUMN energia INTEGER DEFAULT 100")
-    except sqlite3.OperationalError:
-        pass
+    # Migrações preventivas para a tabela 'jogadores'
+    colunas_novas_jogadores = [
+        ('energia', "INTEGER DEFAULT 100"),
+        ('foto', "TEXT DEFAULT NULL")
+    ]
+    for col, tipo in colunas_novas_jogadores:
+        try:
+            cursor.execute(f"ALTER TABLE jogadores ADD COLUMN {col} {tipo}")
+        except sqlite3.OperationalError:
+            pass
 
     conn.commit()
     conn.close()

@@ -3,3 +3,16 @@ __pycache__/
 meu_manager.db
 .venv/
 .vscode/
+
+# Arquivos de compilação do Flet / Flutter / Gradle
+build/
+dist/
+.flet/
+
+# Pacotes e executáveis
+*.zip
+*.apk
+*.aab
+
+# Banco de dados local (opcional, recomendado se for apenas para testes)
+*.db

@@ -1,22 +1,25 @@
+import os
 import sqlite3
 import flet as ft
 
 import database
 import gerador
 import hub
-import cria_time
+import cria_time2
 
 
 def obter_id_usuario_com_time():
     """
     Verifica se existe algum utilizador na base de dados que já possua uma equipa.
-    Retorna o ID do utilizador se encontrar, ou None se não houver equipas.
+    Garante a migração e sincronização das colunas de escudos e fotos na BD.
     """
     database.inicializar_banco()
 
     conn = gerador.conectar_bd()
     cursor = conn.cursor()
     try:
+        gerador.garantir_colunas(cursor, conn)
+
         cursor.execute("""
             SELECT u.id 
             FROM usuarios u
@@ -32,23 +35,20 @@ def obter_id_usuario_com_time():
 
 
 def main(page: ft.Page):
-    # Configurações gerais da janela
     page.title = "FootManager"
     page.bgcolor = "#0F172A"
 
-    # 1. Garante a inicialização das tabelas
     database.inicializar_banco()
-
-    # 2. Verifica a existência de um clube registado
     id_usuario = obter_id_usuario_com_time()
 
     if id_usuario:
-        # Se já existir equipa, abre o Hub diretamente
         hub.carregar_hub(page, id_usuario)
     else:
-        # Se não existir equipa, direciona para a criação de clube
-        cria_time.main(page)
+        cria_time2.main(page)
 
 
 if __name__ == "__main__":
-    ft.app(target=main)
+    # Caminho absoluto para a pasta assets, evitando falhas de diretório
+    caminho_assets = os.path.join(os.path.dirname(
+        os.path.abspath(__file__)), "assets")
+    ft.app(target=main, assets_dir=caminho_assets)

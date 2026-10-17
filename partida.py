@@ -4,154 +4,25 @@ import random
 import asyncio
 import gerador
 import simulador
-
-# Mapeamento de cores para os escudos
-CORES = {
-    "Azul": ft.Colors.BLUE_700,
-    "Vermelho": ft.Colors.RED_700,
-    "Preto": ft.Colors.BLACK87,
-    "Branco": ft.Colors.WHITE,
-    "Amarelo": ft.Colors.AMBER_400,
-    "Verde": ft.Colors.GREEN_700,
-    "Laranja": ft.Colors.ORANGE_700,
-    "Roxo": ft.Colors.PURPLE_700
-}
-
-PALETAS_VARIADAS = [
-    (ft.Colors.PURPLE_800, ft.Colors.AMBER_400,
-     ft.Colors.DEEP_PURPLE_900, ft.Colors.WHITE),
-    (ft.Colors.GREEN_700, ft.Colors.WHITE,
-     ft.Colors.LIGHT_GREEN_900, ft.Colors.YELLOW_400),
-    (ft.Colors.RED_800, ft.Colors.BLACK, ft.Colors.RED_900, ft.Colors.AMBER_400),
-    (ft.Colors.BLUE_800, ft.Colors.YELLOW_400, ft.Colors.BLUE_900, ft.Colors.WHITE),
-    (ft.Colors.ORANGE_800, ft.Colors.BLACK,
-     ft.Colors.DEEP_ORANGE_900, ft.Colors.WHITE),
-    (ft.Colors.CYAN_700, ft.Colors.WHITE, ft.Colors.TEAL_900, ft.Colors.CYAN_200),
-    (ft.Colors.PINK_700, ft.Colors.BLACK, ft.Colors.PINK_900, ft.Colors.WHITE),
-    (ft.Colors.LIME_700, ft.Colors.BLUE_900, ft.Colors.GREEN_900, ft.Colors.WHITE),
-    (ft.Colors.AMBER_700, ft.Colors.BLACK, ft.Colors.AMBER_900, ft.Colors.WHITE),
-    (ft.Colors.INDIGO_800, ft.Colors.RED_500,
-     ft.Colors.INDIGO_900, ft.Colors.WHITE)
-]
+import escudos
 
 
 def construir_escudo(cor1=None, cor2=None, cor3=None, cor4=None, formato="Clássico", simbolo="Bola", tamanho=1.0, seed_id=1):
-    rnd = random.Random(seed_id)
-
-    if not cor1:
-        c1, c2, c3, c4 = rnd.choice(PALETAS_VARIADAS)
-    else:
-        c1 = CORES.get(cor1, ft.Colors.BLUE_700) if isinstance(
-            cor1, str) else cor1
-        c2 = CORES.get(cor2, ft.Colors.RED_700) if isinstance(
-            cor2, str) else cor2
-        c3 = CORES.get(cor3, ft.Colors.AMBER_400) if isinstance(
-            cor3, str) else cor3
-        c4 = CORES.get(cor4, ft.Colors.WHITE) if isinstance(
-            cor4, str) else cor4
-
-    fmt = str(formato or "Clássico").lower()
-
-    # Mapeia o símbolo a partir das opções do gerador
-    icone_nome = gerador.ICONES.get(simbolo, ft.Icons.SPORTS_SOCCER)
-    icone_centro = ft.Icon(name=icone_nome, size=32 * tamanho, color=c4)
-
-    listra1 = ft.Container(width=10 * tamanho, height=90 * tamanho, bgcolor=c2)
-    listra2 = ft.Container(width=10 * tamanho, height=90 * tamanho, bgcolor=c2)
-    listra3 = ft.Container(width=10 * tamanho, height=90 * tamanho, bgcolor=c2)
-
-    painel_listras = ft.Row([listra1, listra2, listra3],
-                            spacing=5 * tamanho, alignment=ft.MainAxisAlignment.CENTER)
-
-    # Formato Losango / Diamante Reto
-    if "losang" in fmt or "diamante" in fmt:
-        miolo = ft.Container(
-            content=ft.Container(
-                content=ft.Stack([
-                    painel_listras,
-                    ft.Container(content=icone_centro,
-                                 alignment=ft.alignment.center)
-                ]),
-                rotate=ft.Rotate(angle=-0.785398),
-                alignment=ft.alignment.center
-            ),
-            width=52 * tamanho,
-            height=52 * tamanho,
-            bgcolor=c1,
-            border_radius=ft.border_radius.all(int(6 * tamanho)),
-            alignment=ft.alignment.center,
-            clip_behavior=ft.ClipBehavior.HARD_EDGE
-        )
-
-        moldura = ft.Container(
-            content=miolo,
-            width=62 * tamanho,
-            height=62 * tamanho,
-            bgcolor=c3,
-            border_radius=ft.border_radius.all(int(8 * tamanho)),
-            alignment=ft.alignment.center,
-            rotate=ft.Rotate(angle=0.785398),
-            shadow=ft.BoxShadow(blur_radius=8, color=ft.Colors.BLACK38)
-        )
-
-        return ft.Container(
-            content=moldura,
-            width=90 * tamanho,
-            height=100 * tamanho,
-            alignment=ft.alignment.center,
-            rotate=None
-        )
-
-    # Ajuste de bordas de acordo com o formato
-    if "italiano" in fmt or "italiana" in fmt:
-        raio_borda = ft.border_radius.only(
-            bottom_left=int(8 * tamanho), bottom_right=int(8 * tamanho),
-            top_left=int(40 * tamanho), top_right=int(40 * tamanho)
-        )
-    elif "redond" in fmt or "círculo" in fmt or "circulo" in fmt:
-        raio_borda = ft.border_radius.all(int(45 * tamanho))
-    elif "quadrad" in fmt:
-        raio_borda = ft.border_radius.all(int(10 * tamanho))
-    elif "modern" in fmt:
-        raio_borda = ft.border_radius.all(int(16 * tamanho))
-    elif "gótic" in fmt or "gotic" in fmt:
-        raio_borda = ft.border_radius.only(
-            bottom_left=int(16 * tamanho), bottom_right=int(16 * tamanho),
-            top_left=int(32 * tamanho), top_right=int(32 * tamanho)
-        )
-    else:  # "Clássico" / Padrão
-        raio_borda = ft.border_radius.only(
-            bottom_left=int(45 * tamanho), bottom_right=int(45 * tamanho),
-            top_left=int(6 * tamanho), top_right=int(6 * tamanho)
-        )
-
-    miolo = ft.Container(
-        content=ft.Stack([
-            painel_listras,
-            ft.Container(content=icone_centro, alignment=ft.alignment.center)
-        ]),
-        width=80 * tamanho,
-        height=90 * tamanho,
-        bgcolor=c1,
-        border_radius=raio_borda,
-        alignment=ft.alignment.center,
-        clip_behavior=ft.ClipBehavior.HARD_EDGE
-    )
-
-    return ft.Container(
-        content=miolo,
-        width=90 * tamanho,
-        height=100 * tamanho,
-        bgcolor=c3,
-        padding=5 * tamanho,
-        border_radius=raio_borda,
-        alignment=ft.alignment.center,
-        shadow=ft.BoxShadow(blur_radius=8, color=ft.Colors.BLACK38)
+    """Constrói o escudo no ecrã de partida utilizando o motor vetorial."""
+    largura = 100 * tamanho
+    return escudos.criar_widget_escudo(
+        formato=formato,
+        simbolo=simbolo,
+        c1=cor1,
+        c2=cor2,
+        c3=cor3,
+        c4=cor4,
+        largura=largura
     )
 
 
 def obter_widget_escudo(escudo_path, c1, c2, c3, c4, formato, simbolo="Bola", tamanho=0.9, seed_id=1):
-    """Renderiza a imagem se 'escudo_path' for um arquivo válido, senão constrói o escudo dinâmico."""
+    """Renderiza a imagem se 'escudo_path' for um ficheiro válido, senão constrói o escudo vetorial."""
     if escudo_path and isinstance(escudo_path, str) and (
         escudo_path.startswith(
             "assets/") or "/" in escudo_path or "\\" in escudo_path or escudo_path.endswith((".png", ".jpg", ".jpeg", ".svg"))
@@ -160,7 +31,6 @@ def obter_widget_escudo(escudo_path, c1, c2, c3, c4, formato, simbolo="Bola", ta
             width=90 * tamanho,
             height=100 * tamanho,
             alignment=ft.alignment.center,
-            rotate=None,
             content=ft.Image(
                 src=escudo_path,
                 width=80 * tamanho,

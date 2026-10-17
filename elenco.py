@@ -1,7 +1,8 @@
+import base64
+import os
 import sqlite3
 import flet as ft
 
-# Mapeamento das táticas exigidas e a quantidade fixa de cada posição
 TATICAS = {
     "4-4-2": {"GOL": 1, "ZAG": 4, "MEI": 4, "ATA": 2},
     "4-3-3": {"GOL": 1, "ZAG": 4, "MEI": 3, "ATA": 3},
@@ -11,8 +12,83 @@ TATICAS = {
 }
 
 
+def buscar_arquivo_imagem(nome_ou_caminho):
+    if not nome_ou_caminho:
+        nome_ou_caminho = "Cartoonify (1).png"
+
+    nome_base = os.path.basename(str(nome_ou_caminho)).strip().lower()
+
+    bases = [
+        os.getcwd(),
+        os.path.dirname(os.path.abspath(__file__))
+    ]
+
+    pastas_busca = []
+    for base in bases:
+        pastas_busca.extend([
+            os.path.join(base, "assets", "Player_img"),
+            os.path.join(base, "assets", "Players_img"),
+            os.path.join(base, "assets", "player_img"),
+            os.path.join(base, "assets", "players_img"),
+            os.path.join(base, "assets"),
+            os.path.join(base, "Player_img"),
+            os.path.join(base, "Players_img"),
+            base
+        ])
+
+    for pasta in pastas_busca:
+        if os.path.exists(pasta) and os.path.isdir(pasta):
+            try:
+                for arq in os.listdir(pasta):
+                    if arq.lower() == nome_base:
+                        return os.path.join(pasta, arq)
+            except Exception:
+                pass
+
+    for pasta in pastas_busca:
+        if os.path.exists(pasta) and os.path.isdir(pasta):
+            try:
+                for arq in os.listdir(pasta):
+                    if arq.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                        return os.path.join(pasta, arq)
+            except Exception:
+                pass
+
+    return None
+
+
+def criar_avatar_jogador(caminho_foto, tamanho=52, cor_borda=ft.Colors.CYAN_400):
+    caminho_encontrado = buscar_arquivo_imagem(caminho_foto)
+
+    if caminho_encontrado:
+        try:
+            with open(caminho_encontrado, "rb") as f:
+                b64_str = base64.b64encode(f.read()).decode('utf-8')
+            img_widget = ft.Image(
+                src_base64=b64_str,
+                width=tamanho,
+                height=tamanho,
+                fit=ft.ImageFit.COVER
+            )
+        except Exception:
+            img_widget = ft.Icon(
+                ft.Icons.PERSON, size=tamanho * 0.7, color=ft.Colors.GREY_400)
+    else:
+        img_widget = ft.Icon(ft.Icons.PERSON, size=tamanho *
+                             0.7, color=ft.Colors.GREY_400)
+
+    return ft.Container(
+        content=img_widget,
+        width=tamanho,
+        height=tamanho,
+        border_radius=tamanho / 2,
+        clip_behavior=ft.ClipBehavior.HARD_EDGE,
+        border=ft.border.all(1.5, cor_borda),
+        alignment=ft.alignment.center
+    )
+
+
 def buscar_dados_elenco(id_usuario):
-    """Busca o time e todos os jogadores do banco de dados, incluindo a energia."""
     conn = sqlite3.connect('meu_manager.db')
     cursor = conn.cursor()
 
@@ -27,7 +103,8 @@ def buscar_dados_elenco(id_usuario):
     id_time, nome_time = time_data
 
     cursor.execute("""
-        SELECT id, nome, posicao, titular, estrelas, velocidade, finalizacao, drible, passe, defesa, COALESCE(energia, 100)
+        SELECT id, nome, posicao, titular, estrelas, 
+               COALESCE(foto, 'Cartoonify (1).png')
         FROM jogadores
         WHERE id_time = ?
         ORDER BY 
@@ -53,19 +130,13 @@ def buscar_dados_elenco(id_usuario):
             "posicao": j[2],
             "titular": bool(j[3]),
             "estrelas": j[4],
-            "vel": j[5],
-            "fin": j[6],
-            "dri": j[7],
-            "pas": j[8],
-            "def": j[9],
-            "energia": j[10]
+            "foto": j[5]
         })
 
     return id_time, nome_time, jogadores
 
 
 def salvar_titulares_db(jogadores):
-    """Atualiza a coluna 'titular' de todos os jogadores no banco SQLite."""
     conn = sqlite3.connect('meu_manager.db')
     cursor = conn.cursor()
 
@@ -80,7 +151,6 @@ def salvar_titulares_db(jogadores):
 
 
 def criar_mini_card_titular(jogador, ao_remover):
-    """Cria o mini-card visual exclusivo para os Titulares com barra/texto de energia."""
     cores_posicao = {
         "GOL": ft.colors.AMBER_700,
         "ZAG": ft.colors.BLUE_700,
@@ -88,49 +158,51 @@ def criar_mini_card_titular(jogador, ao_remover):
         "ATA": ft.colors.RED_700
     }
 
-    e = jogador.get("energia", 100)
-    cor_energia = (
-        ft.colors.GREEN_400 if e >= 70
-        else ft.colors.AMBER_400 if e >= 40
-        else ft.colors.RED_400
-    )
+    avatar = criar_avatar_jogador(
+        jogador["foto"], tamanho=48, cor_borda=ft.colors.AMBER_400)
 
     return ft.Container(
         content=ft.Column([
             ft.Row([
                 ft.Container(
                     content=ft.Text(
-                        jogador["posicao"], size=9, weight=ft.FontWeight.BOLD, color=ft.colors.WHITE),
+                        jogador["posicao"], size=10, weight=ft.FontWeight.BOLD, color=ft.colors.WHITE),
                     bgcolor=cores_posicao.get(
                         jogador["posicao"], ft.colors.GREY_700),
                     padding=ft.padding.symmetric(horizontal=6, vertical=2),
                     border_radius=4
                 ),
-                ft.Text(f"⚡{e}%", size=9,
-                        weight=ft.FontWeight.BOLD, color=cor_energia),
                 ft.IconButton(
                     icon=ft.icons.CLOSE,
-                    icon_size=12,
+                    icon_size=14,
                     icon_color=ft.colors.RED_400,
-                    tooltip="Remover dos Titulares",
+                    tooltip="Remover",
                     on_click=lambda e: ao_remover(jogador)
                 )
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            ft.Text(jogador["nome"], size=11, weight=ft.FontWeight.BOLD,
-                    color=ft.colors.WHITE, no_wrap=True),
+
+            avatar,
+
+            ft.Text(
+                jogador["nome"].split()[0],
+                size=11,
+                weight=ft.FontWeight.BOLD,
+                color=ft.colors.WHITE,
+                no_wrap=True,
+                max_lines=1
+            ),
             ft.Text("⭐ " * jogador["estrelas"], size=8)
-        ], spacing=2, alignment=ft.MainAxisAlignment.CENTER),
-        width=135,
+        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.CENTER, spacing=3),
+        width=115,
         padding=8,
         bgcolor="#0F172A",
-        border_radius=8,
+        border_radius=10,
         border=ft.border.all(1, ft.colors.AMBER_400),
         shadow=ft.BoxShadow(blur_radius=4, color=ft.colors.BLACK38)
     )
 
 
 def criar_card_reserva_completo(jogador, ao_escalar):
-    """Cria a exibição em card para os jogadores do banco de reservas com estado de energia."""
     cores_posicao = {
         "GOL": ft.colors.AMBER_700,
         "ZAG": ft.colors.BLUE_700,
@@ -139,29 +211,12 @@ def criar_card_reserva_completo(jogador, ao_escalar):
     }
     cor_badge = cores_posicao.get(jogador["posicao"], ft.colors.GREY_700)
 
-    e = jogador.get("energia", 100)
-    cor_energia = (
-        ft.colors.GREEN_400 if e >= 70
-        else ft.colors.AMBER_400 if e >= 40
-        else ft.colors.RED_400
-    )
-
-    if jogador["posicao"] == "GOL":
-        r1, v1 = "VEL", jogador["vel"]
-        r2, v2 = "RFL", jogador["fin"]
-        r3, v3 = "POS", jogador["dri"]
-        r4, v4 = "REP", jogador["pas"]
-        r5, v5 = "DEF", jogador["def"]
-    else:
-        r1, v1 = "VEL", jogador["vel"]
-        r2, v2 = "FIN", jogador["fin"]
-        r3, v3 = "DRI", jogador["dri"]
-        r4, v4 = "PAS", jogador["pas"]
-        r5, v5 = "DEF", jogador["def"]
+    avatar = criar_avatar_jogador(
+        jogador["foto"], tamanho=56, cor_borda=ft.colors.CYAN_400)
 
     btn_escalar = ft.ElevatedButton(
-        text="Promover a Titular",
-        icon=ft.icons.ADD_CIRCLE_OUTLINE,
+        text="Promover",
+        icon=ft.icons.ADD,
         style=ft.ButtonStyle(color=ft.colors.GREEN_300, bgcolor="#0F172A"),
         on_click=lambda e: ao_escalar(jogador)
     )
@@ -171,42 +226,29 @@ def criar_card_reserva_completo(jogador, ao_escalar):
             ft.Row([
                 ft.Container(
                     content=ft.Text(
-                        jogador["posicao"], size=12, weight=ft.FontWeight.BOLD, color=ft.colors.WHITE),
+                        jogador["posicao"], size=10, weight=ft.FontWeight.BOLD, color=ft.colors.WHITE),
                     bgcolor=cor_badge,
-                    padding=ft.padding.symmetric(horizontal=8, vertical=3),
-                    border_radius=5
+                    padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                    border_radius=4
                 ),
-                ft.Text(f"⚡{e}%", size=11,
-                        weight=ft.FontWeight.BOLD, color=cor_energia),
-                ft.Text("⭐ " * jogador["estrelas"], size=11),
+                ft.Text("⭐ " * jogador["estrelas"], size=8),
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
 
-            ft.Divider(height=8, color=ft.colors.TRANSPARENT),
+            avatar,
 
-            ft.Text(jogador["nome"], size=15, weight=ft.FontWeight.BOLD,
-                    color=ft.colors.WHITE, no_wrap=True),
+            ft.Text(
+                jogador["nome"],
+                size=12,
+                weight=ft.FontWeight.BOLD,
+                color=ft.colors.WHITE,
+                no_wrap=True,
+                max_lines=1
+            ),
 
-            ft.Divider(height=8, color=ft.colors.GREY_800),
-
-            ft.Column([
-                ft.Row([
-                    ft.Text(f"{r1}: {v1}", size=11, color=ft.colors.GREY_300),
-                    ft.Text(f"{r2}: {v2}", size=11, color=ft.colors.GREY_300),
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                ft.Row([
-                    ft.Text(f"{r3}: {v3}", size=11, color=ft.colors.GREY_300),
-                    ft.Text(f"{r4}: {v4}", size=11, color=ft.colors.GREY_300),
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                ft.Row([
-                    ft.Text(f"{r5}: {v5}", size=11, color=ft.colors.GREY_300),
-                ], alignment=ft.MainAxisAlignment.START),
-            ], spacing=2),
-
-            ft.Divider(height=8, color=ft.colors.TRANSPARENT),
             btn_escalar
-        ]),
-        width=210,
-        padding=12,
+        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.CENTER, spacing=6),
+        width=135,
+        padding=10,
         bgcolor="#1E293B",
         border_radius=12,
         border=ft.border.all(1, ft.colors.GREY_800),
@@ -310,7 +352,6 @@ def carregar_elenco(page: ft.Page, id_usuario: int, ao_voltar_hub):
     def renderizar_interface(e=None):
         tatica_req = TATICAS[drop_tatica.value]
 
-        # 1. Atualiza Titulares
         painel_titulares.controls.clear()
         titulares = [j for j in jogadores if j["titular"]]
 
@@ -322,11 +363,10 @@ def carregar_elenco(page: ft.Page, id_usuario: int, ao_voltar_hub):
 
         if not titulares:
             painel_titulares.controls.append(
-                ft.Text("Nenhum titular selecionado. Clique em 'Promover a Titular' nos reservas abaixo.",
+                ft.Text("Nenhum titular selecionado.",
                         color=ft.colors.GREY_500, size=13)
             )
 
-        # 2. Atualiza Reservas
         painel_reservas.controls.clear()
         seccoes_reservas = {"GOL": [], "ZAG": [], "MEI": [], "ATA": []}
 
@@ -337,10 +377,10 @@ def carregar_elenco(page: ft.Page, id_usuario: int, ao_voltar_hub):
                 seccoes_reservas[j["posicao"]].append(card)
 
         titulos_posicao = {
-            "GOL": f"🧤 Goleiros Reservas (Exigido no titular: {tatica_req['GOL']})",
-            "ZAG": f"🛡️ Zagueiros Reservas (Exigido no titular: {tatica_req['ZAG']})",
-            "MEI": f"🧠 Meias Reservas (Exigido no titular: {tatica_req['MEI']})",
-            "ATA": f"⚡ Atacantes Reservas (Exigido no titular: {tatica_req['ATA']})"
+            "GOL": f"🧤 Goleiros Reservas ({tatica_req['GOL']} exigidos)",
+            "ZAG": f"🛡️ Zagueiros Reservas ({tatica_req['ZAG']} exigidos)",
+            "MEI": f"🧠 Meias Reservas ({tatica_req['MEI']} exigidos)",
+            "ATA": f"⚡ Atacantes Reservas ({tatica_req['ATA']} exigidos)"
         }
 
         tem_reserva = False
@@ -349,16 +389,16 @@ def carregar_elenco(page: ft.Page, id_usuario: int, ao_voltar_hub):
                 tem_reserva = True
                 painel_reservas.controls.append(
                     ft.Text(
-                        titulos_posicao[chave], size=18, weight=ft.FontWeight.BOLD, color=ft.colors.WHITE)
+                        titulos_posicao[chave], size=16, weight=ft.FontWeight.BOLD, color=ft.colors.WHITE)
                 )
                 painel_reservas.controls.append(
                     ft.Row(seccoes_reservas[chave],
-                           wrap=True, spacing=15, run_spacing=15)
+                           wrap=True, spacing=12, run_spacing=12)
                 )
 
         if not tem_reserva:
             painel_reservas.controls.append(
-                ft.Text("Todos os jogadores do plantel estão atualmente escalados no time titular.",
+                ft.Text("Todos os jogadores estão escalados no time titular.",
                         color=ft.colors.GREEN_400, size=14)
             )
 
@@ -368,27 +408,27 @@ def carregar_elenco(page: ft.Page, id_usuario: int, ao_voltar_hub):
 
     topo = ft.Row([
         ft.Column([
-            ft.Text("GESTÃO TÁTICA E ELENCO", size=24,
+            ft.Text("GESTÃO TÁTICA E ELENCO", size=22,
                     weight=ft.FontWeight.BOLD, color=ft.colors.WHITE),
-            ft.Text(f"Clube: {nome_time} | Total no Elenco: {len(jogadores)} Jogadores",
-                    size=14, color=ft.colors.GREY_400),
+            ft.Text(f"Clube: {nome_time} | Total: {len(jogadores)} Jogadores",
+                    size=13, color=ft.colors.GREY_400),
         ]),
         ft.Row([
             drop_tatica,
             ft.ElevatedButton("Guardar Tática", icon=ft.icons.SAVE,
-                              height=45, on_click=salvar_escalacao),
+                              height=40, on_click=salvar_escalacao),
             ft.ElevatedButton("Voltar ao Hub", icon=ft.icons.ARROW_BACK,
-                              height=45, on_click=lambda e: ao_voltar_hub(id_usuario))
+                              height=40, on_click=lambda e: ao_voltar_hub(id_usuario))
         ], spacing=10)
     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, width=920)
 
     secao_titulares = ft.Container(
         content=ft.Column([
-            ft.Text("⭐ TIME TITULAR (MINI CARDS)", size=15,
+            ft.Text("⭐ TIME TITULAR", size=15,
                     weight=ft.FontWeight.BOLD, color=ft.colors.AMBER_400),
             painel_titulares
         ]),
-        padding=15,
+        padding=12,
         bgcolor="#1E293B",
         border_radius=12,
         width=920,
@@ -401,22 +441,14 @@ def carregar_elenco(page: ft.Page, id_usuario: int, ao_voltar_hub):
                 topo,
                 txt_status,
                 secao_titulares,
-                ft.Divider(color=ft.colors.GREY_800, height=20),
-                ft.Text("📋 BANCO DE RESERVAS / PLANTEL", size=20,
+                ft.Divider(color=ft.colors.GREY_800, height=15),
+                ft.Text("📋 BANCO DE RESERVAS / PLANTEL", size=18,
                         weight=ft.FontWeight.BOLD, color=ft.colors.WHITE),
                 painel_reservas
             ],
             width=920,
-            spacing=15
+            spacing=12
         )
     )
 
     renderizar_interface()
-
-
-if __name__ == "__main__":
-    def main(page: ft.Page):
-        carregar_elenco(page, id_usuario=1,
-                        ao_voltar_hub=lambda id_u: print("Voltar ao Hub"))
-
-    ft.app(target=main)

@@ -3,12 +3,13 @@ import sqlite3
 import random
 import gerador
 import partida
+import escudos
 
 
 def obter_escudo(id_time, tamanho=28):
     """
     Busca as configurações do escudo (incluindo o símbolo) e a imagem no banco de dados,
-    gerando o escudo em tamanho compacto (~28px) ideal para linhas de tabela.
+    gerando o escudo vetorial dinâmico em tamanho compacto (~28px) para as linhas da tabela.
     """
     conn = sqlite3.connect('meu_manager.db')
     cursor = conn.cursor()
@@ -28,31 +29,43 @@ def obter_escudo(id_time, tamanho=28):
 
     conn.close()
 
-    # Ajusta o fator de escala para que o escudo fique compacto na tabela (~28px)
-    escala = tamanho / 100.0
-
     if row:
         fmt, sim, c1, c2, c3, c4, esc_path = row
-        return partida.obter_widget_escudo(
-            escudo_path=esc_path,
+        if esc_path and isinstance(esc_path, str) and (
+            esc_path.startswith(
+                "assets/") or "/" in esc_path or "\\" in esc_path or esc_path.endswith((".png", ".jpg", ".jpeg", ".svg"))
+        ):
+            return ft.Container(
+                width=tamanho,
+                height=tamanho * 1.15,
+                alignment=ft.alignment.center,
+                content=ft.Image(
+                    src=esc_path,
+                    width=tamanho,
+                    height=tamanho * 1.15,
+                    fit=ft.ImageFit.CONTAIN
+                )
+            )
+        return escudos.criar_widget_escudo(
+            formato=fmt or "Clássico",
+            simbolo=sim or "Bola",
             c1=c1,
             c2=c2,
             c3=c3,
             c4=c4,
-            formato=fmt or "Clássico",
-            simbolo=sim or "Bola",
-            tamanho=escala,
-            seed_id=id_time
+            largura=tamanho
         )
 
-    return partida.obter_widget_escudo(
-        escudo_path=None,
-        c1=None, c2=None, c3=None, c4=None,
+    return escudos.criar_widget_escudo(
         formato="Clássico",
         simbolo="Bola",
-        tamanho=escala,
-        seed_id=id_time
+        c1="Azul",
+        c2="Vermelho",
+        c3="Amarelo",
+        c4="Branco",
+        largura=tamanho
     )
+
 
 def premiar_subida_divisao(id_usuario, valor_premio=1500):
     """Premia o utilizador no banco de dados por subir de divisão."""
@@ -224,13 +237,12 @@ def carregar_liga(page: ft.Page, id_usuario: int, ao_voltar_hub):
     for idx, t in enumerate(times_ordenados):
         pos = idx + 1
 
-        # Destaque de cor suave e contrastante para linhas
         if t["is_user"]:
-            cor_fundo = "#1E40AF"  # Azul destacado para o utilizador
+            cor_fundo = "#1E40AF"
         elif pos <= 2:
-            cor_fundo = "#064E3B"  # Verde escuro para zona de subida
+            cor_fundo = "#064E3B"
         else:
-            cor_fundo = "#0F172A" if idx % 2 == 0 else "#1E293B"  # Zebra sutil
+            cor_fundo = "#0F172A" if idx % 2 == 0 else "#1E293B"
 
         escudo_widget = obter_escudo(t["id"], tamanho=28)
 
@@ -285,10 +297,9 @@ def carregar_liga(page: ft.Page, id_usuario: int, ao_voltar_hub):
             ft.DataColumn(ft.Text("SG", style=estilo_cabecalho)),
         ],
         rows=rows,
-        data_row_max_height=42,  # Mantém as linhas da tabela com altura elegante
+        data_row_max_height=42,
     )
 
-    # Cartão de fundo para dar destaque e excelente contraste à tabela
     cartao_tabela = ft.Container(
         content=tabela,
         bgcolor="#1E293B",

@@ -4,12 +4,44 @@ import random
 import sqlite3
 import sys
 import flet as ft
+import escudos
+
+
+def obter_fotos_disponiveis():
+    """
+    Localiza dinamicamente no disco a pasta de imagens (seja Player_img ou Players_img)
+    e retorna a lista de caminhos relativos de todos os avatares encontrados.
+    """
+    pasta_raiz = os.path.dirname(os.path.abspath(__file__))
+    candidatos = [
+        os.path.join(pasta_raiz, "assets", "Player_img"),
+        os.path.join(pasta_raiz, "assets", "Players_img"),
+        os.path.join(pasta_raiz, "assets", "player_img"),
+        os.path.join(pasta_raiz, "assets", "players_img"),
+        os.path.join(pasta_raiz, "Player_img"),
+        os.path.join(pasta_raiz, "Players_img"),
+    ]
+
+    for p in candidatos:
+        if os.path.exists(p) and os.path.isdir(p):
+            imgs = [f for f in os.listdir(p) if f.lower().endswith(
+                ('.png', '.jpg', '.jpeg', '.webp'))]
+            if imgs:
+                nome_pasta = os.path.basename(p)
+                return sorted([f"{nome_pasta}/{img}" for img in imgs])
+    return []
+
+
+def sortear_foto_jogador():
+    """Sorteia uma foto que realmente exista no diretório do projeto."""
+    fotos = obter_fotos_disponiveis()
+    if fotos:
+        return random.choice(fotos)
+    return "Player_img/Cartoonify (1).png"
 
 
 def obter_caminho_bd():
-    """
-    Retorna o caminho do banco de dados compatível com Windows, Mac, Linux e Android.
-    """
+    """Retorna o caminho do banco de dados compatível com Windows, Mac, Linux e Android."""
     nome_bd = 'meu_manager.db'
 
     flet_storage = os.environ.get("FLET_APP_STORAGE_DATA")
@@ -65,7 +97,8 @@ NOMES_TIMES = [
     "Estrela do Norte", "Sporting Litoral", "Cruzeiro do Sul", "Guarani Urbano",
     "Académica FC", "Imperial FC", "Vanguardas SC", "FC Metropolitano", "So kanela FC",
     "Lobos da Serra", "Dragões do Oeste", "Falcões do Norte", "Tigres do Sul",
-    "Batinga FC", "Sao Thome FC", "Flamengo", "Palmeiras", "São Paulo"
+    "Batinga FC", "Sao Thome FC", "Flamengo", "Palmeiras", "São Paulo", "Rua de Baixo FC",
+    "Rua de Cima FC", "Sobradinho EC"
 ]
 
 NOMES_JOGADORES = [
@@ -90,8 +123,8 @@ SOBRENOMES = SOBRENOMES_JOGADORES
 
 LISTA_CORES = ["Azul", "Vermelho", "Preto",
                "Branco", "Amarelo", "Verde", "Laranja", "Roxo"]
-FORMATOS_ESCUDO = ["Clássico", "Losango",
-                   "Redondo", "Moderno", "Gótico", "Italiano"]
+
+FORMATOS_ESCUDO = escudos.FORMATOS
 
 MAPA_CORES = {
     "Azul": ft.Colors.BLUE_700,
@@ -119,8 +152,8 @@ LISTA_SIMBOLOS = list(ICONES.keys())
 
 
 def garantir_colunas(cursor, conn=None):
-    """Garante as colunas e atualiza permanentemente no BD os times que ficaram com 'Estrela'."""
-    colunas = [
+    """Garante as colunas das tabelas 'times' e 'jogadores' e atualiza os dados em falta."""
+    colunas_times = [
         ('formato', "'Clássico'"),
         ('simbolo', "'Estrela'"),
         ('escudo', "NULL"),
@@ -129,16 +162,22 @@ def garantir_colunas(cursor, conn=None):
         ('cor_3', "'Amarelo'"),
         ('cor_4', "'Branco'")
     ]
-    for col, default in colunas:
+    for col, default in colunas_times:
         try:
             cursor.execute(
                 f"ALTER TABLE times ADD COLUMN {col} TEXT DEFAULT {default}")
         except sqlite3.OperationalError:
             pass
 
+    # Garante a coluna 'foto' na tabela de jogadores
+    try:
+        cursor.execute("ALTER TABLE jogadores ADD COLUMN foto TEXT")
+    except sqlite3.OperationalError:
+        pass
+
     col_id = obter_coluna_id_times(cursor)
 
-    # Força a re-randomização e SALVA no BD todos os times que estão com 'Estrela' ou sem símbolo
+    # 1. Atualiza escudos sem símbolo/formato
     try:
         cursor.execute(
             f"SELECT {col_id} FROM times WHERE simbolo IS NULL OR simbolo = 'Estrela' OR simbolo = ''")
@@ -148,13 +187,24 @@ def garantir_colunas(cursor, conn=None):
             f_rand = random.choice(FORMATOS_ESCUDO)
             cursor.execute(
                 f"UPDATE times SET simbolo = ?, formato = ? WHERE {col_id} = ?", (s_rand, f_rand, id_t))
-
-        if conn:
-            conn.commit()
-        elif hasattr(cursor, 'connection') and cursor.connection:
-            cursor.connection.commit()
     except Exception:
         pass
+
+    # 2. Preenche a foto de todos os jogadores existentes que ainda estejam sem foto
+    try:
+        cursor.execute(
+            "SELECT id FROM jogadores WHERE foto IS NULL OR foto = ''")
+        jogadores_sem_foto = cursor.fetchall()
+        for (id_j,) in jogadores_sem_foto:
+            cursor.execute(
+                "UPDATE jogadores SET foto = ? WHERE id = ?", (sortear_foto_jogador(), id_j))
+    except Exception:
+        pass
+
+    if conn:
+        conn.commit()
+    elif hasattr(cursor, 'connection') and cursor.connection:
+        cursor.connection.commit()
 
 
 def obter_cor_flet(cor_str):
@@ -165,68 +215,9 @@ def obter_cor_flet(cor_str):
     return cor_str
 
 
-def obter_formatos_escala(escala: float):
-    return {
-        "Clássico": (
-            140 * escala, 160 * escala, 124 * escala, 144 * escala,
-            ft.border_radius.only(
-                bottom_left=70 * escala, bottom_right=70 * escala,
-                top_left=10 * escala, top_right=10 * escala
-            ),
-            ft.border_radius.only(
-                bottom_left=62 * escala, bottom_right=62 * escala,
-                top_left=6 * escala, top_right=6 * escala
-            ),
-            0
-        ),
-        "Losango": (
-            130 * escala, 130 * escala, 114 * escala, 114 * escala,
-            ft.border_radius.all(16 * escala),
-            ft.border_radius.all(10 * escala),
-            math.pi / 4
-        ),
-        "Redondo": (
-            140 * escala, 140 * escala, 124 * escala, 124 * escala,
-            ft.border_radius.all(70 * escala),
-            ft.border_radius.all(62 * escala),
-            0
-        ),
-        "Moderno": (
-            140 * escala, 160 * escala, 124 * escala, 144 * escala,
-            ft.border_radius.all(25 * escala),
-            ft.border_radius.all(18 * escala),
-            0
-        ),
-        "Gótico": (
-            140 * escala, 160 * escala, 124 * escala, 144 * escala,
-            ft.border_radius.only(
-                bottom_left=25 * escala, bottom_right=25 * escala,
-                top_left=50 * escala, top_right=50 * escala
-            ),
-            ft.border_radius.only(
-                bottom_left=18 * escala, bottom_right=18 * escala,
-                top_left=42 * escala, top_right=42 * escala
-            ),
-            0
-        ),
-        "Italiano": (
-            140 * escala, 160 * escala, 124 * escala, 144 * escala,
-            ft.border_radius.only(
-                bottom_left=15 * escala, bottom_right=15 * escala,
-                top_left=70 * escala, top_right=70 * escala
-            ),
-            ft.border_radius.only(
-                bottom_left=8 * escala, bottom_right=8 * escala,
-                top_left=62 * escala, top_right=62 * escala
-            ),
-            0
-        )
-    }
-
-
 def criar_escudo_time(
-    formato="Losango",
-    simbolo=None,
+    formato="Clássico",
+    simbolo="Bola",
     cor_principal="Azul",
     cor_secundaria="Vermelho",
     cor_borda="Amarelo",
@@ -234,88 +225,15 @@ def criar_escudo_time(
     tamanho=140,
     **kwargs
 ):
-    formato = kwargs.get('formato', kwargs.get('escudo_formato', formato))
-    simbolo = kwargs.get('simbolo', kwargs.get('icone', kwargs.get(
-        'simbolo_escudo', kwargs.get('simbolo_time', simbolo))))
-
-    cor_principal = kwargs.get('cor_1', kwargs.get('c1', cor_principal))
-    cor_secundaria = kwargs.get('cor_2', kwargs.get('c2', cor_secundaria))
-    cor_borda = kwargs.get('cor_3', kwargs.get('c3', cor_borda))
-    cor_texto = kwargs.get('cor_4', kwargs.get('c4', cor_texto))
-
-    # Caso venha sem símbolo ou seja o símbolo genérico 'Estrela', sorteia um ícone variado
-    if not simbolo or simbolo == "Estrela" or simbolo not in ICONES:
-        simbolo = random.choice(
-            [s for s in LISTA_SIMBOLOS if s != "Estrela"] or LISTA_SIMBOLOS)
-
-    bg_miolo = obter_cor_flet(cor_principal)
-    bg_listras = obter_cor_flet(cor_secundaria)
-    bg_borda = obter_cor_flet(cor_borda)
-    color_icone = obter_cor_flet(cor_texto)
-
-    icone_nome = ICONES.get(simbolo, ft.Icons.SPORTS_SOCCER)
-
-    escala = tamanho / 140.0
-    formatos = obter_formatos_escala(escala)
-
-    fmt_chave = str(formato or "Losango")
-    if fmt_chave not in formatos:
-        fmt_chave = "Losango"
-
-    w_ext, h_ext, w_int, h_int, borda_ext, borda_int, angulo = formatos[fmt_chave]
-
-    listra1 = ft.Container(
-        width=25 * escala, height=180 * escala, bgcolor=bg_listras)
-    listra2 = ft.Container(
-        width=25 * escala, height=180 * escala, bgcolor=bg_listras)
-    listra3 = ft.Container(
-        width=25 * escala, height=180 * escala, bgcolor=bg_listras)
-
-    painel_listras = ft.Row(
-        [listra1, listra2, listra3],
-        spacing=30 * escala,
-        alignment=ft.MainAxisAlignment.CENTER
-    )
-
-    icone_centro = ft.Icon(
-        name=icone_nome,
-        size=50 * escala,
-        color=color_icone,
-        rotate=ft.Rotate(angle=-angulo)
-    )
-
-    miolo_escudo = ft.Container(
-        content=ft.Stack([
-            painel_listras,
-            ft.Container(content=icone_centro, alignment=ft.alignment.center)
-        ]),
-        width=w_int,
-        height=h_int,
-        bgcolor=bg_miolo,
-        border_radius=borda_int,
-        alignment=ft.alignment.center,
-        clip_behavior=ft.ClipBehavior.HARD_EDGE
-    )
-
-    escudo = ft.Container(
-        content=miolo_escudo,
-        width=w_ext,
-        height=h_ext,
-        bgcolor=bg_borda,
-        padding=8 * escala,
-        border_radius=borda_ext,
-        alignment=ft.alignment.center,
-        rotate=ft.Rotate(angle=angulo),
-        shadow=ft.BoxShadow(
-            blur_radius=10 * escala, color=ft.Colors.BLACK26, offset=ft.Offset(0, 5 * escala)
-        )
-    )
-
-    return ft.Container(
-        content=escudo,
-        width=180 * escala,
-        height=180 * escala,
-        alignment=ft.alignment.center
+    return escudos.criar_widget_escudo(
+        formato=formato,
+        simbolo=simbolo,
+        c1=cor_principal,
+        c2=cor_secundaria,
+        c3=cor_borda,
+        c4=cor_texto,
+        largura=tamanho,
+        **kwargs
     )
 
 
@@ -349,6 +267,7 @@ def gerar_elenco(id_time, nivel_base=1, **kwargs):
 
     for posicao in distribuicao:
         nome = f"{random.choice(NOMES_JOGADORES)} {random.choice(SOBRENOMES_JOGADORES)}"
+        foto = sortear_foto_jogador()
 
         if posicao == 'GOL':
             vel = random.randint(nivel * 10, nivel * 20)
@@ -383,7 +302,7 @@ def gerar_elenco(id_time, nivel_base=1, **kwargs):
         titular = 1 if len(elenco) < 11 else 0
 
         elenco.append((id_time, nome, posicao, titular,
-                      estrelas, vel, fin, dri, pas, defesa))
+                      estrelas, vel, fin, dri, pas, defesa, foto))
 
     return elenco
 
@@ -412,6 +331,7 @@ def gerar_time_torneio(nome_time, estrelas_bot=1):
 
     for pos in posicoes:
         nome_j = f"{random.choice(NOMES_JOGADORES)} {random.choice(SOBRENOMES_JOGADORES)}"
+        foto_j = sortear_foto_jogador()
         vel = min(random.randint(min_stat, max_stat), 99)
         fin = min(random.randint(min_stat, max_stat), 99)
         dri = min(random.randint(min_stat, max_stat), 99)
@@ -419,9 +339,9 @@ def gerar_time_torneio(nome_time, estrelas_bot=1):
         dfe = min(random.randint(min_stat, max_stat), 99)
 
         cursor.execute(f"""
-            INSERT INTO jogadores ({col_fk}, nome, posicao, titular, estrelas, velocidade, finalizacao, drible, passe, defesa)
-            VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
-        """, (id_time, nome_j, pos, estrelas_bot, vel, fin, dri, pas, dfe))
+            INSERT INTO jogadores ({col_fk}, nome, posicao, titular, estrelas, velocidade, finalizacao, drible, passe, defesa, foto)
+            VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)
+        """, (id_time, nome_j, pos, estrelas_bot, vel, fin, dri, pas, dfe, foto_j))
 
     conn.commit()
     conn.close()
@@ -445,8 +365,8 @@ def criar_time_usuario(id_usuario, nome_time, cor_1="Azul", cor_2="Vermelho", co
     jogadores = gerar_elenco(id_time, nivel_base=1)
 
     cursor.executemany(f"""
-        INSERT INTO jogadores ({col_fk}, nome, posicao, titular, estrelas, velocidade, finalizacao, drible, passe, defesa)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO jogadores ({col_fk}, nome, posicao, titular, estrelas, velocidade, finalizacao, drible, passe, defesa, foto)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, jogadores)
 
     conn.commit()
@@ -473,8 +393,8 @@ def criar_time_bot(nome_time, nivel_estrelas=1):
     jogadores = gerar_elenco(id_time, nivel_base=nivel_estrelas)
 
     cursor.executemany(f'''
-        INSERT INTO jogadores ({col_fk}, nome, posicao, titular, estrelas, velocidade, finalizacao, drible, passe, defesa)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO jogadores ({col_fk}, nome, posicao, titular, estrelas, velocidade, finalizacao, drible, passe, defesa, foto)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', jogadores)
 
     conn.commit()
